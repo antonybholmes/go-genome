@@ -44,21 +44,21 @@ type GeneProm struct {
 	D          int
 }
 
-type Annotate struct {
-	GeneDB    *loctogene.LoctogeneDb
+type AnnotateDb struct {
+	GeneDb    *loctogene.LoctogeneDb
 	TSSRegion *dna.TSSRegion
 	N         uint16
 }
 
-func NewAnnotate(genesdb *loctogene.LoctogeneDb, tssRegion *dna.TSSRegion, n uint16) *Annotate {
-	return &Annotate{
-		GeneDB:    genesdb,
+func NewAnnotateDb(genesdb *loctogene.LoctogeneDb, tssRegion *dna.TSSRegion, n uint16) *AnnotateDb {
+	return &AnnotateDb{
+		GeneDb:    genesdb,
 		TSSRegion: tssRegion,
 		N:         n,
 	}
 }
 
-func (annotate *Annotate) Annotate(location *dna.Location) (*GeneAnnotation, error) {
+func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation, error) {
 	mid := location.Mid()
 
 	// extend search area to account  for promoter
@@ -68,10 +68,10 @@ func (annotate *Annotate) Annotate(location *dna.Location) (*GeneAnnotation, err
 	//     location.End + annotate.tssRegion.offset_5p.abs(),
 	// )?;
 
-	genesWithin, err := annotate.GeneDB.WithinGenesAndPromoter(
+	genesWithin, err := annotateDb.GeneDb.WithinGenesAndPromoter(
 		location,
 		loctogene.Transcript,
-		utils.UintMax(annotate.TSSRegion.Offset5P(), annotate.TSSRegion.Offset3P()),
+		utils.UintMax(annotateDb.TSSRegion.Offset5P(), annotateDb.TSSRegion.Offset3P()),
 	)
 
 	if err != nil {
@@ -96,7 +96,7 @@ func (annotate *Annotate) Annotate(location *dna.Location) (*GeneAnnotation, err
 
 		//let labels = annotate.classify_location(location, gene);
 
-		exons, err := annotate.GeneDB.InExon(location, id)
+		exons, err := annotateDb.GeneDb.InExon(location, id)
 
 		if err != nil {
 			return nil, err
@@ -104,7 +104,7 @@ func (annotate *Annotate) Annotate(location *dna.Location) (*GeneAnnotation, err
 
 		isExon := len(exons.Features) > 0
 
-		isPromoter := (gene.Strand == "+" && mid >= gene.Start-annotate.TSSRegion.Offset5P() && mid <= gene.Start+annotate.TSSRegion.Offset3P()) || (gene.Strand == "-" && mid >= gene.End-annotate.TSSRegion.Offset3P() && mid <= gene.End+annotate.TSSRegion.Offset5P())
+		isPromoter := (gene.Strand == "+" && mid >= gene.Start-annotateDb.TSSRegion.Offset5P() && mid <= gene.Start+annotateDb.TSSRegion.Offset3P()) || (gene.Strand == "-" && mid >= gene.End-annotateDb.TSSRegion.Offset3P() && mid <= gene.End+annotateDb.TSSRegion.Offset5P())
 
 		isIntronic := mid >= gene.Start && mid <= gene.End
 
@@ -198,7 +198,7 @@ func (annotate *Annotate) Annotate(location *dna.Location) (*GeneAnnotation, err
 		tssDists = append(tssDists, NA)
 	}
 
-	closestGenes, err := annotate.GeneDB.ClosestGenes(location, annotate.N, loctogene.Gene)
+	closestGenes, err := annotateDb.GeneDb.ClosestGenes(location, annotateDb.N, loctogene.Gene)
 
 	if err != nil {
 		return nil, err
@@ -207,7 +207,7 @@ func (annotate *Annotate) Annotate(location *dna.Location) (*GeneAnnotation, err
 	closestGeneList := []*ClosestGene{}
 
 	for _, cg := range closestGenes.Features {
-		label := annotate.ClassifyLocation(location, &cg)
+		label := annotateDb.ClassifyLocation(location, &cg)
 
 		if err != nil {
 			return nil, err
@@ -231,12 +231,12 @@ func (annotate *Annotate) Annotate(location *dna.Location) (*GeneAnnotation, err
 	return &annotation, nil
 }
 
-func (annotate *Annotate) ClassifyLocation(location *dna.Location, feature *loctogene.GenomicFeature) string {
+func (annotateDb *AnnotateDb) ClassifyLocation(location *dna.Location, feature *loctogene.GenomicFeature) string {
 	mid := location.Mid()
 	var s uint
 
 	if feature.Strand == "+" {
-		s = feature.Start - annotate.TSSRegion.Offset5P()
+		s = feature.Start - annotateDb.TSSRegion.Offset5P()
 	} else {
 		s = feature.Start
 	}
@@ -244,7 +244,7 @@ func (annotate *Annotate) ClassifyLocation(location *dna.Location, feature *loct
 	var e uint
 
 	if feature.Strand == "-" {
-		e = feature.End + annotate.TSSRegion.Offset5P()
+		e = feature.End + annotateDb.TSSRegion.Offset5P()
 	} else {
 		e = feature.End
 	}
@@ -253,9 +253,9 @@ func (annotate *Annotate) ClassifyLocation(location *dna.Location, feature *loct
 		return INTERGENIC
 	}
 
-	isPromoter := (feature.Strand == "+" && mid >= s && mid <= feature.Start+annotate.TSSRegion.Offset3P()) || (feature.Strand == "-" && mid >= feature.End-annotate.TSSRegion.Offset3P() && mid <= e)
+	isPromoter := (feature.Strand == "+" && mid >= s && mid <= feature.Start+annotateDb.TSSRegion.Offset3P()) || (feature.Strand == "-" && mid >= feature.End-annotateDb.TSSRegion.Offset3P() && mid <= e)
 
-	exons, err := annotate.GeneDB.InExon(location, feature.GeneId)
+	exons, err := annotateDb.GeneDb.InExon(location, feature.GeneId)
 
 	if err != nil {
 		return ""

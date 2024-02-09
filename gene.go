@@ -17,6 +17,7 @@ const EXONIC string = "exonic"
 const INTRONIC string = "intronic"
 const INTERGENIC string = "intergenic"
 
+const LABEL_SEP string = ","
 const FEATURE_SEP string = ";"
 
 //const ERROR_FEATURES:Features= Features{location: dna::EMPTY_STRING, level: dna::EMPTY_STRING, features: [].to_vec()};
@@ -118,7 +119,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 			d = int(gene.End) - int(mid)
 		}
 
-		fmt.Printf("%d %d %d %s\n", d, gene.End, mid, gene.GeneSymbol)
+		//fmt.Printf("%d %d %d %s\n", d, gene.End, mid, gene.GeneSymbol)
 
 		// update by inserting default case and then updating
 
@@ -297,5 +298,5 @@ func makeLabel(isPromoter bool, isExon bool, isIntronic bool) string {
 		}
 	}
 
-	return strings.Join(labels, ",")
+	return strings.Join(labels, LABEL_SEP)
 }

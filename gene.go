@@ -1,6 +1,7 @@
 package gene
 
 import (
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -21,10 +22,9 @@ const FEATURE_SEP string = ";"
 //const ERROR_FEATURES:Features= Features{location: dna::EMPTY_STRING, level: dna::EMPTY_STRING, features: [].to_vec()};
 
 type ClosestGene struct {
-	GeneId     string `json:"gene_id"`
-	GeneSymbol string `json:"gene_symbol"`
-	PromLabel  string `json:"prom_label"`
-	Dist       int    `json:"dist"`
+	Feature   *loctogene.GenomicFeature `json:"feature"`
+	PromLabel string                    `json:"prom_label"`
+	Dist      int                       `json:"dist"`
 }
 
 type GeneAnnotation struct {
@@ -33,10 +33,12 @@ type GeneAnnotation struct {
 	GeneSymbols  string         `json:"gene_symbols"`
 	PromLabels   string         `json:"prom_labels"`
 	Dists        string         `json:"dists"`
+	Locations    string         `json:"tss"`
 	ClosestGenes []*ClosestGene `json:"closest_genes"`
 }
 
 type GeneProm struct {
+	Feature    *loctogene.GenomicFeature
 	IsPromoter bool
 	IsIntronic bool
 	IsExon     bool
@@ -116,7 +118,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 			d = int(gene.End) - int(mid)
 		}
 
-		//println!("{} {} {}", gene.End - mid, gene.End, mid);
+		fmt.Printf("%d %d %d %s\n", d, gene.End, mid, gene.GeneSymbol)
 
 		// update by inserting default case and then updating
 
@@ -129,12 +131,15 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 			prom.IsPromoter = prom.IsPromoter || isPromoter
 			prom.IsExon = prom.IsExon || len(exons.Features) > 0
 
+			// record the feature that is closest to our site
 			if absD < prom.AbsD {
+				prom.Feature = &gene
 				prom.D = d
 				prom.AbsD = absD
 			}
 		} else {
 			promoterMap[id] = &GeneProm{
+				Feature:    &gene,
 				IsPromoter: isPromoter,
 				IsIntronic: isIntronic,
 				IsExon:     isExon,
@@ -175,7 +180,8 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 	geneSymbols := []string{}
 
 	for _, id := range ids {
-		geneSymbols = append(geneSymbols, idMap[id])
+		p := promoterMap[id]
+		geneSymbols = append(geneSymbols, fmt.Sprintf("%s(%s)", idMap[id], p.Feature.Strand))
 	}
 
 	promLabels := []string{}
@@ -192,10 +198,18 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 		tssDists = append(tssDists, strconv.Itoa(p.D))
 	}
 
+	featureLocations := []string{}
+
+	for _, id := range ids {
+		p := promoterMap[id]
+		featureLocations = append(featureLocations, p.Feature.ToLocation().String())
+	}
+
 	if len(ids) == 0 {
 		ids = append(ids, NA)
 		geneSymbols = append(geneSymbols, NA)
 		tssDists = append(tssDists, NA)
+		featureLocations = append(featureLocations, NA)
 	}
 
 	closestGenes, err := annotateDb.GeneDb.ClosestGenes(location, annotateDb.N, loctogene.Gene)
@@ -213,10 +227,9 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 			return nil, err
 		}
 
-		closestGeneList = append(closestGeneList, &ClosestGene{GeneId: cg.GeneId,
-			GeneSymbol: cg.GeneSymbol,
-			Dist:       cg.Dist,
-			PromLabel:  label})
+		closestGeneList = append(closestGeneList, &ClosestGene{Feature: &cg,
+			Dist:      cg.Dist,
+			PromLabel: label})
 	}
 
 	annotation := GeneAnnotation{
@@ -225,6 +238,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 		GeneSymbols:  strings.Join(geneSymbols, FEATURE_SEP),
 		PromLabels:   strings.Join(promLabels, FEATURE_SEP),
 		Dists:        strings.Join(tssDists, FEATURE_SEP),
+		Locations:    strings.Join(featureLocations, FEATURE_SEP),
 		ClosestGenes: closestGeneList,
 	}
 

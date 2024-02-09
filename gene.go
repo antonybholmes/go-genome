@@ -25,7 +25,7 @@ const FEATURE_SEP string = ";"
 type ClosestGene struct {
 	Feature   *loctogene.GenomicFeature `json:"feature"`
 	PromLabel string                    `json:"prom_label"`
-	Dist      int                       `json:"dist"`
+	Dist      int                       `json:"tss_dist"`
 }
 
 type GeneAnnotation struct {
@@ -33,8 +33,8 @@ type GeneAnnotation struct {
 	GeneIds      string         `json:"gene_ids"`
 	GeneSymbols  string         `json:"gene_symbols"`
 	PromLabels   string         `json:"prom_labels"`
-	Dists        string         `json:"dists"`
-	Locations    string         `json:"tss"`
+	Dists        string         `json:"tss_dists"`
+	Locations    string         `json:"gene_locations"`
 	ClosestGenes []*ClosestGene `json:"closest_genes"`
 }
 
@@ -182,7 +182,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 
 	for _, id := range ids {
 		p := promoterMap[id]
-		geneSymbols = append(geneSymbols, fmt.Sprintf("%s(%s)", idMap[id], p.Feature.Strand))
+		geneSymbols = append(geneSymbols, LabelGene(idMap[id], p.Feature.Strand))
 	}
 
 	promLabels := []string{}
@@ -281,6 +281,10 @@ func (annotateDb *AnnotateDb) ClassifyLocation(location *dna.Location, feature *
 	isIntronic := mid >= feature.Start && mid <= feature.End
 
 	return makeLabel(isPromoter, isExon, isIntronic)
+}
+
+func LabelGene(id string, strand string) string {
+	return fmt.Sprintf("%s|%s", id, strand)
 }
 
 func makeLabel(isPromoter bool, isExon bool, isIntronic bool) string {

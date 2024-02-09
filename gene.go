@@ -28,6 +28,7 @@ type ClosestGene struct {
 }
 
 type GeneAnnotation struct {
+	Location     *dna.Location  `json:"location"`
 	GeneIds      string         `json:"gene_ids"`
 	GeneSymbols  string         `json:"gene_symbols"`
 	PromLabels   string         `json:"prom_labels"`
@@ -44,12 +45,12 @@ type GeneProm struct {
 }
 
 type Annotate struct {
-	GeneDB    *loctogene.LoctogeneDB
+	GeneDB    *loctogene.LoctogeneDb
 	TSSRegion *dna.TSSRegion
 	N         uint16
 }
 
-func NewAnnotate(genesdb *loctogene.LoctogeneDB, tssRegion *dna.TSSRegion, n uint16) *Annotate {
+func NewAnnotate(genesdb *loctogene.LoctogeneDb, tssRegion *dna.TSSRegion, n uint16) *Annotate {
 	return &Annotate{
 		GeneDB:    genesdb,
 		TSSRegion: tssRegion,
@@ -219,6 +220,7 @@ func (annotate *Annotate) Annotate(location *dna.Location) (*GeneAnnotation, err
 	}
 
 	annotation := GeneAnnotation{
+		Location:     location,
 		GeneIds:      strings.Join(ids, FEATURE_SEP),
 		GeneSymbols:  strings.Join(geneSymbols, FEATURE_SEP),
 		PromLabels:   strings.Join(promLabels, FEATURE_SEP),

@@ -24,18 +24,18 @@ const FEATURE_SEP string = ";"
 
 type ClosestGene struct {
 	Feature   *loctogene.GenomicFeature `json:"feature"`
-	PromLabel string                    `json:"prom_label"`
-	Dist      int                       `json:"tss_dist"`
+	PromLabel string                    `json:"promLabel"`
+	TssDist   int                       `json:"tssDist"`
 }
 
 type GeneAnnotation struct {
 	Location     *dna.Location  `json:"location"`
-	GeneIds      string         `json:"gene_ids"`
-	GeneSymbols  string         `json:"gene_symbols"`
-	PromLabels   string         `json:"prom_labels"`
-	Dists        string         `json:"tss_dists"`
-	Locations    string         `json:"gene_locations"`
-	ClosestGenes []*ClosestGene `json:"closest_genes"`
+	GeneIds      string         `json:"geneIds"`
+	GeneSymbols  string         `json:"geneSymbols"`
+	PromLabels   string         `json:"promLabels"`
+	Dists        string         `json:"tssDists"`
+	Locations    string         `json:"geneLocations"`
+	ClosestGenes []*ClosestGene `json:"closestGenes"`
 }
 
 type GeneProm struct {
@@ -229,7 +229,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 		}
 
 		closestGeneList = append(closestGeneList, &ClosestGene{Feature: &cg,
-			Dist:      cg.Dist,
+			TssDist:   cg.TssDist,
 			PromLabel: label})
 	}
 

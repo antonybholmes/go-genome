@@ -8,7 +8,7 @@ import (
 
 	"github.com/antonybholmes/go-dna"
 	"github.com/antonybholmes/go-loctogene"
-	"github.com/antonybholmes/go-utils"
+	"github.com/antonybholmes/go-math"
 )
 
 const NA string = "n/a"
@@ -74,7 +74,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 	genesWithin, err := annotateDb.GeneDb.WithinGenesAndPromoter(
 		location,
 		loctogene.Transcript,
-		utils.UintMax(annotateDb.TSSRegion.Offset5P(), annotateDb.TSSRegion.Offset3P()),
+		math.UintMax(annotateDb.TSSRegion.Offset5P(), annotateDb.TSSRegion.Offset3P()),
 	)
 
 	if err != nil {
@@ -123,7 +123,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 
 		// update by inserting default case and then updating
 
-		absD := uint(utils.AbsInt(d))
+		absD := uint(math.AbsInt(d))
 
 		prom, ok := promoterMap[id]
 

@@ -1,4 +1,4 @@
-package gene
+package genes
 
 import (
 	"encoding/json"

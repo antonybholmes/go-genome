@@ -1,4 +1,4 @@
-package gene
+package genes
 
 import (
 	"fmt"
@@ -182,14 +182,14 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 
 	for _, id := range ids {
 		p := promoterMap[id]
-		geneSymbols = append(geneSymbols, LabelGene(idMap[id], p.Feature.Strand))
+		geneSymbols = append(geneSymbols, GeneStrandLabel(idMap[id], p.Feature.Strand))
 	}
 
 	promLabels := []string{}
 
 	for _, id := range ids {
 		p := promoterMap[id]
-		promLabels = append(promLabels, makeLabel(p.IsPromoter, p.IsExon, p.IsIntronic))
+		promLabels = append(promLabels, PromLabel(p.IsPromoter, p.IsExon, p.IsIntronic))
 	}
 
 	tssDists := []string{}
@@ -280,14 +280,14 @@ func (annotateDb *AnnotateDb) ClassifyLocation(location *dna.Location, feature *
 
 	isIntronic := mid >= feature.Start && mid <= feature.End
 
-	return makeLabel(isPromoter, isExon, isIntronic)
+	return PromLabel(isPromoter, isExon, isIntronic)
 }
 
-func LabelGene(id string, strand string) string {
+func GeneStrandLabel(id string, strand string) string {
 	return fmt.Sprintf("%s|%s", id, strand)
 }
 
-func makeLabel(isPromoter bool, isExon bool, isIntronic bool) string {
+func PromLabel(isPromoter bool, isExon bool, isIntronic bool) string {
 	labels := []string{}
 
 	if isPromoter {

@@ -1,306 +1,285 @@
 package gene
 
 import (
+	"database/sql"
 	"fmt"
-	"slices"
-	"strconv"
-	"strings"
+	"path/filepath"
 
 	"github.com/antonybholmes/go-dna"
-	"github.com/antonybholmes/go-loctogene"
-	"github.com/antonybholmes/go-math"
 )
 
-const NA string = "n/a"
-const PROMOTER string = "promoter"
-const EXONIC string = "exonic"
-const INTRONIC string = "intronic"
-const INTERGENIC string = "intergenic"
+const WITHIN_GENE_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, ? - stranded_start
+ FROM genes
+ WHERE level=? AND chr=? AND ((start <= ? AND end >= ?) OR (start <= ? AND end >= ?))
+ ORDER BY start ASC`
 
-const LABEL_SEP string = ","
-const FEATURE_SEP string = ";"
+const CLOSEST_GENE_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, ? - stranded_start
+ FROM genes
+ WHERE level = ? AND chr = ?
+ ORDER BY ABS(stranded_start - ?)
+ LIMIT ?`
 
-//const ERROR_FEATURES:Features= Features{location: dna::EMPTY_STRING, level: dna::EMPTY_STRING, features: [].to_vec()};
+const WITHIN_GENE_AND_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, ? - stranded_start 
+ FROM genes 
+ WHERE level = ? AND chr = ? AND ((start - ? <= ? AND end + ? >= ?) OR (start - ? <= ? AND end + ? >= ?)) 
+ ORDER BY start ASC`
 
-type ClosestGene struct {
-	Feature   *loctogene.GenomicFeature `json:"feature"`
-	PromLabel string                    `json:"promLabel"`
-	TssDist   int                       `json:"tssDist"`
+const IN_EXON_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, start - ? 
+ FROM genes 
+ WHERE level=3 AND gene_id=? AND chr=? AND ((start <= ? AND end >= ?) OR (start <= ? AND end >= ?)) 
+ ORDER BY start ASC`
+
+const IN_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, start - ? 
+ FROM genes 
+ WHERE level=2 AND gene_id=? AND chr=? AND ? >= stranded_start - ? AND ? <= stranded_start + ? 
+ ORDER BY start ASC`
+
+type GenomicFeature struct {
+	Id         int    `json:"id"`
+	Chr        string `json:"chr"`
+	Start      uint   `json:"start"`
+	End        uint   `json:"end"`
+	Strand     string `json:"strand"`
+	GeneId     string `json:"geneId"`
+	GeneSymbol string `json:"geneSymbol"`
+	TssDist    int    `json:"tssDist"`
 }
 
-type GeneAnnotation struct {
-	Location     *dna.Location  `json:"location"`
-	GeneIds      string         `json:"geneIds"`
-	GeneSymbols  string         `json:"geneSymbols"`
-	PromLabels   string         `json:"promLabels"`
-	Dists        string         `json:"tssDists"`
-	Locations    string         `json:"geneLocations"`
-	ClosestGenes []*ClosestGene `json:"closestGenes"`
+func (feature *GenomicFeature) ToLocation() *dna.Location {
+	return dna.NewLocation(feature.Chr, feature.Start, feature.End)
 }
 
-type GeneProm struct {
-	Feature    *loctogene.GenomicFeature
-	IsPromoter bool
-	IsIntronic bool
-	IsExon     bool
-	AbsD       uint
-	D          int
-}
-
-type AnnotateDb struct {
-	GeneDb    *loctogene.LoctogeneDb
-	TSSRegion *dna.TSSRegion
-	N         uint16
-}
-
-func NewAnnotateDb(genesdb *loctogene.LoctogeneDb, tssRegion *dna.TSSRegion, n uint16) *AnnotateDb {
-	return &AnnotateDb{
-		GeneDb:    genesdb,
-		TSSRegion: tssRegion,
-		N:         n,
-	}
-}
-
-func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation, error) {
-	mid := location.Mid()
-
-	// extend search area to account  for promoter
-	// let search_loc: Location = Location::new(
-	//     &location.chr,
-	//     location.Start - annotate.tssRegion.offset_5p.abs(),
-	//     location.End + annotate.tssRegion.offset_5p.abs(),
-	// )?;
-
-	genesWithin, err := annotateDb.GeneDb.WithinGenesAndPromoter(
-		location,
-		loctogene.Transcript,
-		math.UintMax(annotateDb.TSSRegion.Offset5P(), annotateDb.TSSRegion.Offset3P()),
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	// we need the unique ids to symbols
-	idMap := make(map[string]string)
-	promoterMap := make(map[string]*GeneProm)
-
-	//let mut distMap: HashMap<&str, bool> = HashMap::new();
-
-	for _, gene := range genesWithin.Features {
-		id := gene.GeneId
-
-		// println!(
-		//     "{} {} {} {} {}",
-		//     gene.gene_id, gene.GeneSymbol, gene.Start, gene.End, gene.strand
-		// );
-
-		idMap[id] = gene.GeneSymbol
-
-		//let labels = annotate.classify_location(location, gene);
-
-		exons, err := annotateDb.GeneDb.InExon(location, id)
-
-		if err != nil {
-			return nil, err
-		}
-
-		isExon := len(exons.Features) > 0
-
-		isPromoter := (gene.Strand == "+" && mid >= gene.Start-annotateDb.TSSRegion.Offset5P() && mid <= gene.Start+annotateDb.TSSRegion.Offset3P()) || (gene.Strand == "-" && mid >= gene.End-annotateDb.TSSRegion.Offset3P() && mid <= gene.End+annotateDb.TSSRegion.Offset5P())
-
-		isIntronic := mid >= gene.Start && mid <= gene.End
-
-		var d int = 0
-
-		if gene.Strand == "+" {
-			d = int(gene.Start) - int(mid)
-		} else {
-			d = int(gene.End) - int(mid)
-		}
-
-		//fmt.Printf("%d %d %d %s\n", d, gene.End, mid, gene.GeneSymbol)
-
-		// update by inserting default case and then updating
-
-		absD := uint(math.AbsInt(d))
-
-		prom, ok := promoterMap[id]
-
-		if ok {
-			prom.IsIntronic = prom.IsIntronic || isIntronic
-			prom.IsPromoter = prom.IsPromoter || isPromoter
-			prom.IsExon = prom.IsExon || len(exons.Features) > 0
-
-			// record the feature that is closest to our site
-			if absD < prom.AbsD {
-				prom.Feature = &gene
-				prom.D = d
-				prom.AbsD = absD
-			}
-		} else {
-			promoterMap[id] = &GeneProm{
-				Feature:    &gene,
-				IsPromoter: isPromoter,
-				IsIntronic: isIntronic,
-				IsExon:     isExon,
-				D:          d,
-				AbsD:       absD,
-			}
-		}
-
-	}
-
-	// sort the ids by distance
-	distMap := make(map[uint][]string)
-
-	for id := range idMap {
-		d := promoterMap[id].AbsD
-		distMap[d] = append(distMap[d], id)
-	}
-
-	// now put the ids in distance order
-	var distances []uint
-
-	for d := range distMap {
-		distances = append(distances, d)
-	}
-
-	slices.Sort(distances)
-
-	ids := []string{}
-
-	for _, d := range distances {
-		dids := distMap[d]
-
-		slices.Sort(dids)
-
-		ids = append(ids, dids...)
-	}
-
-	geneSymbols := []string{}
-
-	for _, id := range ids {
-		p := promoterMap[id]
-		geneSymbols = append(geneSymbols, LabelGene(idMap[id], p.Feature.Strand))
-	}
-
-	promLabels := []string{}
-
-	for _, id := range ids {
-		p := promoterMap[id]
-		promLabels = append(promLabels, makeLabel(p.IsPromoter, p.IsExon, p.IsIntronic))
-	}
-
-	tssDists := []string{}
-
-	for _, id := range ids {
-		p := promoterMap[id]
-		tssDists = append(tssDists, strconv.Itoa(p.D))
-	}
-
-	featureLocations := []string{}
-
-	for _, id := range ids {
-		p := promoterMap[id]
-		featureLocations = append(featureLocations, p.Feature.ToLocation().String())
-	}
-
-	if len(ids) == 0 {
-		ids = append(ids, NA)
-		geneSymbols = append(geneSymbols, NA)
-		tssDists = append(tssDists, NA)
-		featureLocations = append(featureLocations, NA)
-	}
-
-	closestGenes, err := annotateDb.GeneDb.ClosestGenes(location, annotateDb.N, loctogene.Gene)
-
-	if err != nil {
-		return nil, err
-	}
-
-	closestGeneList := []*ClosestGene{}
-
-	for _, cg := range closestGenes.Features {
-		label := annotateDb.ClassifyLocation(location, &cg)
-
-		if err != nil {
-			return nil, err
-		}
-
-		closestGeneList = append(closestGeneList, &ClosestGene{Feature: &cg,
-			TssDist:   cg.TssDist,
-			PromLabel: label})
-	}
-
-	annotation := GeneAnnotation{
-		Location:     location,
-		GeneIds:      strings.Join(ids, FEATURE_SEP),
-		GeneSymbols:  strings.Join(geneSymbols, FEATURE_SEP),
-		PromLabels:   strings.Join(promLabels, FEATURE_SEP),
-		Dists:        strings.Join(tssDists, FEATURE_SEP),
-		Locations:    strings.Join(featureLocations, FEATURE_SEP),
-		ClosestGenes: closestGeneList,
-	}
-
-	return &annotation, nil
-}
-
-func (annotateDb *AnnotateDb) ClassifyLocation(location *dna.Location, feature *loctogene.GenomicFeature) string {
-	mid := location.Mid()
+func (feature *GenomicFeature) TSS() *dna.Location {
 	var s uint
 
 	if feature.Strand == "+" {
-		s = feature.Start - annotateDb.TSSRegion.Offset5P()
-	} else {
 		s = feature.Start
-	}
-
-	var e uint
-
-	if feature.Strand == "-" {
-		e = feature.End + annotateDb.TSSRegion.Offset5P()
 	} else {
-		e = feature.End
+		s = feature.End
 	}
 
-	if location.Start > e || location.End < s {
-		return INTERGENIC
+	return dna.NewLocation(feature.Chr, s, s)
+}
+
+type GenomicFeatures struct {
+	Location string           `json:"location"`
+	Level    string           `json:"level"`
+	Features []GenomicFeature `json:"features"`
+}
+
+var ERROR_FEATURES = GenomicFeatures{Location: "", Level: "", Features: []GenomicFeature{}}
+
+type Level int
+
+const (
+	Gene       Level = 1
+	Transcript Level = 2
+	Exon       Level = 3
+)
+
+func ParseLevel(level string) Level {
+	switch level {
+	case "t", "transcript", "2":
+		return Transcript
+	case "e", "exon", "3":
+		return Exon
+	default:
+		return Gene
+	}
+}
+
+func (level Level) String() string {
+	switch level {
+	case Exon:
+		return "Exon"
+	case Transcript:
+		return "Transcript"
+	default:
+		return "Gene"
+	}
+}
+
+type GeneDbCache struct {
+	dir   string
+	cache map[string]*GeneDb
+}
+
+func NewGeneDbCache() *GeneDbCache {
+	return &GeneDbCache{dir: ".", cache: make(map[string]*GeneDb)}
+}
+
+func (genedbcache *GeneDbCache) Dir(dir string) {
+	genedbcache.dir = dir
+}
+
+func (genedbcache *GeneDbCache) Db(assembly string) (*GeneDb, error) {
+	_, ok := genedbcache.cache[assembly]
+
+	if !ok {
+		db, err := NewGeneDb(filepath.Join(genedbcache.dir, fmt.Sprintf("%s.db", assembly)))
+
+		if err != nil {
+			return nil, err
+		}
+
+		genedbcache.cache[assembly] = db
 	}
 
-	isPromoter := (feature.Strand == "+" && mid >= s && mid <= feature.Start+annotateDb.TSSRegion.Offset3P()) || (feature.Strand == "-" && mid >= feature.End-annotateDb.TSSRegion.Offset3P() && mid <= e)
+	return genedbcache.cache[assembly], nil
+}
 
-	exons, err := annotateDb.GeneDb.InExon(location, feature.GeneId)
+func (genedbcache *GeneDbCache) Close() {
+	for _, db := range genedbcache.cache {
+		db.Close()
+	}
+}
+
+type GeneDb struct {
+	db                    *sql.DB
+	withinGeneStmt        *sql.Stmt
+	withinGeneAndPromStmt *sql.Stmt
+	inExonStmt            *sql.Stmt
+	closestGeneStmt       *sql.Stmt
+}
+
+func NewGeneDb(file string) (*GeneDb, error) {
+	db, err := sql.Open("sqlite3", file)
 
 	if err != nil {
-		return ""
+		return nil, err
 	}
 
-	isExon := len(exons.Features) > 0
+	withinGeneStmt, err := db.Prepare(WITHIN_GENE_SQL)
 
-	isIntronic := mid >= feature.Start && mid <= feature.End
-
-	return makeLabel(isPromoter, isExon, isIntronic)
-}
-
-func LabelGene(id string, strand string) string {
-	return fmt.Sprintf("%s|%s", id, strand)
-}
-
-func makeLabel(isPromoter bool, isExon bool, isIntronic bool) string {
-	labels := []string{}
-
-	if isPromoter {
-		labels = append(labels, PROMOTER)
+	if err != nil {
+		return nil, err
 	}
 
-	if isExon {
-		labels = append(labels, EXONIC)
-	} else {
-		if isIntronic {
-			labels = append(labels, INTRONIC)
+	withinGeneAndPromStmt, err := db.Prepare(WITHIN_GENE_AND_PROMOTER_SQL)
+
+	if err != nil {
+		return nil, err
+	}
+
+	inExonStmt, err := db.Prepare(IN_EXON_SQL)
+
+	if err != nil {
+		return nil, err
+	}
+
+	closestGeneStmt, err := db.Prepare(CLOSEST_GENE_SQL)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &GeneDb{db, withinGeneStmt, withinGeneAndPromStmt, inExonStmt, closestGeneStmt}, nil
+}
+
+func (genedb *GeneDb) Close() {
+	genedb.db.Close()
+}
+
+func (genedb *GeneDb) WithinGenes(location *dna.Location, level Level) (*GenomicFeatures, error) {
+	mid := (location.Start + location.End) / 2
+
+	rows, err := genedb.withinGeneStmt.Query(
+		mid,
+		level,
+		location.Chr,
+		location.Start,
+		location.Start,
+		location.End,
+		location.End)
+
+	if err != nil {
+		return nil, err //fmt.Errorf("there was an error with the database query")
+	}
+
+	return rowsToRecords(location, rows, level)
+}
+
+func (genedb *GeneDb) WithinGenesAndPromoter(location *dna.Location, level Level, pad uint) (*GenomicFeatures, error) {
+	mid := (location.Start + location.End) / 2
+
+	rows, err := genedb.withinGeneAndPromStmt.Query(
+		mid,
+		level,
+		location.Chr,
+		pad,
+		location.Start,
+		pad,
+		location.Start,
+		pad,
+		location.End,
+		pad,
+		location.End)
+
+	if err != nil {
+		return nil, err //fmt.Errorf("there was an error with the database query")
+	}
+
+	return rowsToRecords(location, rows, level)
+}
+
+func (genedb *GeneDb) InExon(location *dna.Location, geneId string) (*GenomicFeatures, error) {
+	mid := (location.Start + location.End) / 2
+
+	rows, err := genedb.inExonStmt.Query(
+		mid,
+		geneId,
+		location.Chr,
+		location.Start,
+		location.Start,
+		location.End,
+		location.End)
+
+	if err != nil {
+		return nil, err //fmt.Errorf("there was an error with the database query")
+	}
+
+	return rowsToRecords(location, rows, Exon)
+}
+
+func (genedb *GeneDb) ClosestGenes(location *dna.Location, n uint16, level Level) (*GenomicFeatures, error) {
+	mid := (location.Start + location.End) / 2
+
+	rows, err := genedb.closestGeneStmt.Query(mid,
+		level,
+		location.Chr,
+		mid,
+		n)
+
+	if err != nil {
+		return nil, err //fmt.Errorf("there was an error with the database query")
+	}
+
+	return rowsToRecords(location, rows, level)
+}
+
+func rowsToRecords(location *dna.Location, rows *sql.Rows, level Level) (*GenomicFeatures, error) {
+	defer rows.Close()
+
+	var id int
+	var chr string
+	var start uint
+	var end uint
+	var strand string
+	var geneId string
+	var geneSymbol string
+	var d int
+
+	var features = []GenomicFeature{}
+
+	for rows.Next() {
+		err := rows.Scan(&id, &chr, &start, &end, &strand, &geneId, &geneSymbol, &d)
+
+		if err != nil {
+			return nil, err //fmt.Errorf("there was an error with the database records")
 		}
+
+		features = append(features, GenomicFeature{Id: id, Chr: chr, Start: start, End: end, Strand: strand, GeneId: geneId, GeneSymbol: geneSymbol, TssDist: d})
 	}
 
-	return strings.Join(labels, LABEL_SEP)
+	return &GenomicFeatures{Location: location.String(), Level: level.String(), Features: features}, nil
 }

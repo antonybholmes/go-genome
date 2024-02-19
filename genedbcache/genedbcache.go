@@ -1,7 +1,7 @@
 package genedbcache
 
 import (
-	"github.com/antonybholmes/go-gene"
+	gene "github.com/antonybholmes/go-genes"
 )
 
 var Cache = gene.NewGeneDbCache()

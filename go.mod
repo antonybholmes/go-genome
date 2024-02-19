@@ -1,4 +1,4 @@
-module github.com/antonybholmes/go-gene
+module github.com/antonybholmes/go-genes
 
 go 1.22.0
 

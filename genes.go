@@ -108,8 +108,12 @@ func NewGeneDbCache() *GeneDbCache {
 	return &GeneDbCache{dir: ".", cache: make(map[string]*GeneDb)}
 }
 
-func (genedbcache *GeneDbCache) Dir(dir string) {
+func (genedbcache *GeneDbCache) SetDir(dir string) {
 	genedbcache.dir = dir
+}
+
+func (genedbcache *GeneDbCache) Dir() string {
+	return genedbcache.dir
 }
 
 func (genedbcache *GeneDbCache) Db(assembly string) (*GeneDb, error) {

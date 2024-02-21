@@ -4,16 +4,16 @@ import (
 	gene "github.com/antonybholmes/go-genes"
 )
 
-var Cache = gene.NewGeneDbCache()
+var cache = gene.NewGeneDbCache()
 
-func SetDir(dir string) {
-	Cache.SetDir(dir)
+func Init(dir string) {
+	cache.Init(dir)
 }
 
 func Dir() string {
-	return Cache.Dir()
+	return cache.Dir()
 }
 
 func Db(assembly string) (*gene.GeneDb, error) {
-	return Cache.Db(assembly)
+	return cache.Db(assembly)
 }

@@ -101,15 +101,16 @@ func (level Level) String() string {
 
 type GeneDbCache struct {
 	dir   string
-	cache map[string]*GeneDb
+	cache *map[string]*GeneDb
 }
 
 func NewGeneDbCache() *GeneDbCache {
-	return &GeneDbCache{dir: ".", cache: make(map[string]*GeneDb)}
+	return &GeneDbCache{}
 }
 
-func (genedbcache *GeneDbCache) SetDir(dir string) {
+func (genedbcache *GeneDbCache) Init(dir string) {
 	genedbcache.dir = dir
+	genedbcache.cache = new(map[string]*GeneDb)
 }
 
 func (genedbcache *GeneDbCache) Dir() string {
@@ -117,7 +118,7 @@ func (genedbcache *GeneDbCache) Dir() string {
 }
 
 func (genedbcache *GeneDbCache) Db(assembly string) (*GeneDb, error) {
-	_, ok := genedbcache.cache[assembly]
+	_, ok := (*genedbcache.cache)[assembly]
 
 	if !ok {
 		db, err := NewGeneDb(filepath.Join(genedbcache.dir, fmt.Sprintf("%s.db", assembly)))
@@ -126,14 +127,14 @@ func (genedbcache *GeneDbCache) Db(assembly string) (*GeneDb, error) {
 			return nil, err
 		}
 
-		genedbcache.cache[assembly] = db
+		(*genedbcache.cache)[assembly] = db
 	}
 
-	return genedbcache.cache[assembly], nil
+	return (*genedbcache.cache)[assembly], nil
 }
 
 func (genedbcache *GeneDbCache) Close() {
-	for _, db := range genedbcache.cache {
+	for _, db := range *genedbcache.cache {
 		db.Close()
 	}
 }

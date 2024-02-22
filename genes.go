@@ -9,30 +9,30 @@ import (
 )
 
 const WITHIN_GENE_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, ? - stranded_start
- FROM genes
- WHERE level=? AND chr=? AND ((start <= ? AND end >= ?) OR (start <= ? AND end >= ?))
- ORDER BY start ASC`
+	FROM genes
+ 	WHERE level=? AND chr=? AND ((start <= ? AND end >= ?) OR (start <= ? AND end >= ?))
+ 	ORDER BY start ASC`
 
 const CLOSEST_GENE_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, ? - stranded_start
- FROM genes
- WHERE level = ? AND chr = ?
- ORDER BY ABS(stranded_start - ?)
- LIMIT ?`
+	FROM genes
+ 	WHERE level = ? AND chr = ?
+ 	ORDER BY ABS(stranded_start - ?)
+ 	LIMIT ?`
 
 const WITHIN_GENE_AND_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, ? - stranded_start 
- FROM genes 
- WHERE level = ? AND chr = ? AND ((start - ? <= ? AND end + ? >= ?) OR (start - ? <= ? AND end + ? >= ?)) 
- ORDER BY start ASC`
+	FROM genes 
+ 	WHERE level = ? AND chr = ? AND ((start - ? <= ? AND end + ? >= ?) OR (start - ? <= ? AND end + ? >= ?)) 
+ 	ORDER BY start ASC`
 
 const IN_EXON_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, start - ? 
- FROM genes 
- WHERE level=3 AND gene_id=? AND chr=? AND ((start <= ? AND end >= ?) OR (start <= ? AND end >= ?)) 
- ORDER BY start ASC`
+	FROM genes 
+ 	WHERE level=3 AND gene_id=? AND chr=? AND ((start <= ? AND end >= ?) OR (start <= ? AND end >= ?)) 
+ 	ORDER BY start ASC`
 
 const IN_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, start - ? 
- FROM genes 
- WHERE level=2 AND gene_id=? AND chr=? AND ? >= stranded_start - ? AND ? <= stranded_start + ? 
- ORDER BY start ASC`
+	FROM genes 
+ 	WHERE level=2 AND gene_id=? AND chr=? AND ? >= stranded_start - ? AND ? <= stranded_start + ? 
+ 	ORDER BY start ASC`
 
 type GenomicFeature struct {
 	Id         int    `json:"id"`

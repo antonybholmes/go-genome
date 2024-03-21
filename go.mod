@@ -8,7 +8,7 @@ replace github.com/antonybholmes/go-dna => ../go-dna
 
 require github.com/antonybholmes/go-math v0.0.0-20240215163921-12bb7e52185c
 
-require github.com/antonybholmes/go-dna v0.0.0-20240220233159-e0a18c04f799
+require github.com/antonybholmes/go-dna v0.0.0-20240315224417-f9bccdb714c5
 
 require (
 	github.com/mattn/go-colorable v0.1.13 // indirect

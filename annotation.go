@@ -48,12 +48,12 @@ type GeneProm struct {
 }
 
 type AnnotateDb struct {
-	GeneDb    *GeneDb
+	GeneDb    *GeneDB
 	TSSRegion *dna.TSSRegion
 	N         uint16
 }
 
-func NewAnnotateDb(genesdb *GeneDb, tssRegion *dna.TSSRegion, n uint16) *AnnotateDb {
+func NewAnnotateDb(genesdb *GeneDB, tssRegion *dna.TSSRegion, n uint16) *AnnotateDb {
 	return &AnnotateDb{
 		GeneDb:    genesdb,
 		TSSRegion: tssRegion,

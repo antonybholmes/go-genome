@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/antonybholmes/go-dna"
+	"github.com/antonybholmes/go-sys"
 )
 
 const WITHIN_GENE_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, ? - stranded_start
@@ -101,27 +102,23 @@ func (level Level) String() string {
 
 type GeneDbCache struct {
 	dir   string
-	cache *map[string]*GeneDb
+	cache *map[string]*GeneDB
 }
 
-func NewGeneDbCache() *GeneDbCache {
-	return &GeneDbCache{}
-}
-
-func (genedbcache *GeneDbCache) Init(dir string) {
-	genedbcache.dir = dir
-	genedbcache.cache = new(map[string]*GeneDb)
+func NewGeneDbCache(dir string) *GeneDbCache {
+	return &GeneDbCache{dir: dir,
+		cache: new(map[string]*GeneDB)}
 }
 
 func (genedbcache *GeneDbCache) Dir() string {
 	return genedbcache.dir
 }
 
-func (genedbcache *GeneDbCache) Db(assembly string) (*GeneDb, error) {
+func (genedbcache *GeneDbCache) Db(assembly string) (*GeneDB, error) {
 	_, ok := (*genedbcache.cache)[assembly]
 
 	if !ok {
-		db, err := NewGeneDb(filepath.Join(genedbcache.dir, fmt.Sprintf("%s.db", assembly)))
+		db, err := NewGeneDB(filepath.Join(genedbcache.dir, fmt.Sprintf("%s.db", assembly)))
 
 		if err != nil {
 			return nil, err
@@ -139,7 +136,7 @@ func (genedbcache *GeneDbCache) Close() {
 	}
 }
 
-type GeneDb struct {
+type GeneDB struct {
 	db                    *sql.DB
 	withinGeneStmt        *sql.Stmt
 	withinGeneAndPromStmt *sql.Stmt
@@ -147,45 +144,21 @@ type GeneDb struct {
 	closestGeneStmt       *sql.Stmt
 }
 
-func NewGeneDb(file string) (*GeneDb, error) {
-	db, err := sql.Open("sqlite3", file)
+func NewGeneDB(file string) (*GeneDB, error) {
+	db := sys.Must(sql.Open("sqlite3", file))
 
-	if err != nil {
-		return nil, err
-	}
-
-	withinGeneStmt, err := db.Prepare(WITHIN_GENE_SQL)
-
-	if err != nil {
-		return nil, err
-	}
-
-	withinGeneAndPromStmt, err := db.Prepare(WITHIN_GENE_AND_PROMOTER_SQL)
-
-	if err != nil {
-		return nil, err
-	}
-
-	inExonStmt, err := db.Prepare(IN_EXON_SQL)
-
-	if err != nil {
-		return nil, err
-	}
-
-	closestGeneStmt, err := db.Prepare(CLOSEST_GENE_SQL)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &GeneDb{db, withinGeneStmt, withinGeneAndPromStmt, inExonStmt, closestGeneStmt}, nil
+	return &GeneDB{db: db,
+		withinGeneStmt:        sys.Must(db.Prepare(WITHIN_GENE_SQL)),
+		withinGeneAndPromStmt: sys.Must(db.Prepare(WITHIN_GENE_AND_PROMOTER_SQL)),
+		inExonStmt:            sys.Must(db.Prepare(IN_EXON_SQL)),
+		closestGeneStmt:       sys.Must(db.Prepare(CLOSEST_GENE_SQL))}, nil
 }
 
-func (genedb *GeneDb) Close() {
+func (genedb *GeneDB) Close() {
 	genedb.db.Close()
 }
 
-func (genedb *GeneDb) WithinGenes(location *dna.Location, level Level) (*GenomicFeatures, error) {
+func (genedb *GeneDB) WithinGenes(location *dna.Location, level Level) (*GenomicFeatures, error) {
 	mid := (location.Start + location.End) / 2
 
 	rows, err := genedb.withinGeneStmt.Query(
@@ -204,7 +177,7 @@ func (genedb *GeneDb) WithinGenes(location *dna.Location, level Level) (*Genomic
 	return rowsToRecords(location, rows, level)
 }
 
-func (genedb *GeneDb) WithinGenesAndPromoter(location *dna.Location, level Level, pad uint) (*GenomicFeatures, error) {
+func (genedb *GeneDB) WithinGenesAndPromoter(location *dna.Location, level Level, pad uint) (*GenomicFeatures, error) {
 	mid := (location.Start + location.End) / 2
 
 	rows, err := genedb.withinGeneAndPromStmt.Query(
@@ -227,7 +200,7 @@ func (genedb *GeneDb) WithinGenesAndPromoter(location *dna.Location, level Level
 	return rowsToRecords(location, rows, level)
 }
 
-func (genedb *GeneDb) InExon(location *dna.Location, geneId string) (*GenomicFeatures, error) {
+func (genedb *GeneDB) InExon(location *dna.Location, geneId string) (*GenomicFeatures, error) {
 	mid := (location.Start + location.End) / 2
 
 	rows, err := genedb.inExonStmt.Query(
@@ -246,7 +219,7 @@ func (genedb *GeneDb) InExon(location *dna.Location, geneId string) (*GenomicFea
 	return rowsToRecords(location, rows, Exon)
 }
 
-func (genedb *GeneDb) ClosestGenes(location *dna.Location, n uint16, level Level) (*GenomicFeatures, error) {
+func (genedb *GeneDB) ClosestGenes(location *dna.Location, n uint16, level Level) (*GenomicFeatures, error) {
 	mid := (location.Start + location.End) / 2
 
 	rows, err := genedb.closestGeneStmt.Query(mid,

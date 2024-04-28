@@ -1,19 +1,30 @@
 package genedbcache
 
 import (
+	"sync"
+
 	gene "github.com/antonybholmes/go-genes"
 )
 
-var cache *gene.GeneDbCache
+var instance *gene.GeneDbCache
+var once sync.Once
 
-func InitCache(dir string) {
-	cache = gene.NewGeneDbCache(dir)
+func InitCache(dir string) *gene.GeneDbCache {
+	once.Do(func() {
+		instance = gene.NewGeneDbCache(dir)
+	})
+
+	return instance
+}
+
+func GetInstance() *gene.GeneDbCache {
+	return instance
 }
 
 func Dir() string {
-	return cache.Dir()
+	return instance.Dir()
 }
 
 func Db(assembly string) (*gene.GeneDB, error) {
-	return cache.Db(assembly)
+	return instance.Db(assembly)
 }

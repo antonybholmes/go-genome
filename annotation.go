@@ -224,10 +224,6 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 	for _, cg := range closestGenes.Features {
 		label := annotateDb.ClassifyLocation(location, &cg)
 
-		if err != nil {
-			return nil, err
-		}
-
 		closestGeneList = append(closestGeneList, &ClosestGene{Feature: &cg,
 			TssDist:   cg.TssDist,
 			PromLabel: label})

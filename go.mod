@@ -1,6 +1,6 @@
 module github.com/antonybholmes/go-genes
 
-go 1.22.0
+go 1.22.2
 
 replace github.com/antonybholmes/go-math => ../go-math
 

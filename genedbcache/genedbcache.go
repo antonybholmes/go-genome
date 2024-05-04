@@ -6,18 +6,18 @@ import (
 	gene "github.com/antonybholmes/go-genes"
 )
 
-var instance *gene.GeneDbCache
+var instance *gene.GeneDBCache
 var once sync.Once
 
-func InitCache(dir string) *gene.GeneDbCache {
+func InitCache(dir string) *gene.GeneDBCache {
 	once.Do(func() {
-		instance = gene.NewGeneDbCache(dir)
+		instance = gene.NewGeneDBCache(dir)
 	})
 
 	return instance
 }
 
-func GetInstance() *gene.GeneDbCache {
+func GetInstance() *gene.GeneDBCache {
 	return instance
 }
 

@@ -25,6 +25,6 @@ func Dir() string {
 	return instance.Dir()
 }
 
-func Db(assembly string) (*gene.GeneDB, error) {
-	return instance.Db(assembly)
+func GeneDB(assembly string) (*gene.GeneDB, error) {
+	return instance.GeneDB(assembly)
 }

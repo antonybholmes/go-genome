@@ -110,28 +110,28 @@ func NewGeneDBCache(dir string) *GeneDBCache {
 		cache: new(map[string]*GeneDB)}
 }
 
-func (genedbcache *GeneDBCache) Dir() string {
-	return genedbcache.dir
+func (cache *GeneDBCache) Dir() string {
+	return cache.dir
 }
 
-func (genedbcache *GeneDBCache) Db(assembly string) (*GeneDB, error) {
-	_, ok := (*genedbcache.cache)[assembly]
+func (cache *GeneDBCache) GeneDB(assembly string) (*GeneDB, error) {
+	_, ok := (*cache.cache)[assembly]
 
 	if !ok {
-		db, err := NewGeneDB(filepath.Join(genedbcache.dir, fmt.Sprintf("%s.db", assembly)))
+		db, err := NewGeneDB(filepath.Join(cache.dir, fmt.Sprintf("%s.db", assembly)))
 
 		if err != nil {
 			return nil, err
 		}
 
-		(*genedbcache.cache)[assembly] = db
+		(*cache.cache)[assembly] = db
 	}
 
-	return (*genedbcache.cache)[assembly], nil
+	return (*cache.cache)[assembly], nil
 }
 
-func (genedbcache *GeneDBCache) Close() {
-	for _, db := range *genedbcache.cache {
+func (cache *GeneDBCache) Close() {
+	for _, db := range *cache.cache {
 		db.Close()
 	}
 }

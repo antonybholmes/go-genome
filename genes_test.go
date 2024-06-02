@@ -12,12 +12,7 @@ func TestWithin(t *testing.T) {
 	fmt.Println("Within")
 
 	file := fmt.Sprintf("../data/gene/%s.db", "grch38")
-	db, err := NewGeneDB(file)
-
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	db := NewGeneDB(file)
 
 	defer db.Close()
 
@@ -39,12 +34,7 @@ func TestClosest(t *testing.T) {
 
 	file := fmt.Sprintf("../data/gene/%s.db", "grch38")
 
-	db, err := NewGeneDB(file)
-
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	db := NewGeneDB(file)
 
 	defer db.Close()
 

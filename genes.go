@@ -118,11 +118,7 @@ func (cache *GeneDBCache) GeneDB(assembly string) (*GeneDB, error) {
 	_, ok := (*cache.cache)[assembly]
 
 	if !ok {
-		db, err := NewGeneDB(filepath.Join(cache.dir, fmt.Sprintf("%s.db", assembly)))
-
-		if err != nil {
-			return nil, err
-		}
+		db := NewGeneDB(filepath.Join(cache.dir, fmt.Sprintf("%s.db", assembly)))
 
 		(*cache.cache)[assembly] = db
 	}
@@ -144,14 +140,14 @@ type GeneDB struct {
 	closestGeneStmt       *sql.Stmt
 }
 
-func NewGeneDB(file string) (*GeneDB, error) {
+func NewGeneDB(file string) *GeneDB {
 	db := sys.Must(sql.Open("sqlite3", file))
 
 	return &GeneDB{db: db,
 		withinGeneStmt:        sys.Must(db.Prepare(WITHIN_GENE_SQL)),
 		withinGeneAndPromStmt: sys.Must(db.Prepare(WITHIN_GENE_AND_PROMOTER_SQL)),
 		inExonStmt:            sys.Must(db.Prepare(IN_EXON_SQL)),
-		closestGeneStmt:       sys.Must(db.Prepare(CLOSEST_GENE_SQL))}, nil
+		closestGeneStmt:       sys.Must(db.Prepare(CLOSEST_GENE_SQL))}
 }
 
 func (genedb *GeneDB) Close() {

@@ -10,9 +10,9 @@ replace github.com/antonybholmes/go-sys => ../go-sys
 
 require github.com/antonybholmes/go-math v0.0.0-20240215163921-12bb7e52185c
 
-require github.com/antonybholmes/go-dna v0.0.0-20240503021126-08c3c39059f5
+require github.com/antonybholmes/go-dna v0.0.0-20240528182114-dd434dbd0c49
 
-require github.com/antonybholmes/go-sys v0.0.0-20240501232923-152b6e4cc204
+require github.com/antonybholmes/go-sys v0.0.0-20240505052557-9f8864ac77aa
 
 require (
 	github.com/mattn/go-colorable v0.1.13 // indirect

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/antonybholmes/go-dna"
+	"github.com/rs/zerolog/log"
 
 	"github.com/antonybholmes/go-math"
 )
@@ -17,25 +18,26 @@ const EXONIC string = "exonic"
 const INTRONIC string = "intronic"
 const INTERGENIC string = "intergenic"
 
-const LABEL_SEP string = ","
-const FEATURE_SEP string = ";"
+const GROUP_SEP string = ","
+const OUTPUT_FEATURE_SEP string = "|"
 
 //const ERROR_FEATURES:Features= Features{location: dna::EMPTY_STRING, level: dna::EMPTY_STRING, features: [].to_vec()};
 
-type ClosestGene struct {
-	Feature   *GenomicFeature `json:"feature"`
-	PromLabel string          `json:"promLabel"`
-	TssDist   int             `json:"tssDist"`
-}
+// type ClosestGene struct {
+// 	Feature   *GenomicFeature `json:"feature"`
+// 	PromLabel string          `json:"promLabel"`
+// 	TssDist   int             `json:"tssDist"`
+// }
 
 type GeneAnnotation struct {
-	Location     *dna.Location  `json:"location"`
-	GeneIds      string         `json:"geneIds"`
-	GeneSymbols  string         `json:"geneSymbols"`
-	PromLabels   string         `json:"promLabels"`
-	Dists        string         `json:"tssDists"`
-	Locations    string         `json:"geneLocations"`
-	ClosestGenes []*ClosestGene `json:"closestGenes"`
+	Location     *dna.Location     `json:"loc"`
+	GeneIds      string            `json:"geneIds"`
+	GeneSymbols  string            `json:"geneSymbols"`
+	GeneStrands  string            `json:"geneStrands"`
+	PromLabels   string            `json:"promLabels"`
+	TSSDists     string            `json:"tssDists"`
+	Locations    string            `json:"geneLocs"`
+	ClosestGenes []*GenomicFeature `json:"closestGenes"`
 }
 
 type GeneProm struct {
@@ -73,7 +75,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 
 	genesWithin, err := annotateDb.GeneDb.WithinGenesAndPromoter(
 		location,
-		Transcript,
+		LEVEL_TRANSCRIPT,
 		math.UintMax(annotateDb.TSSRegion.Offset5P(), annotateDb.TSSRegion.Offset3P()),
 	)
 
@@ -90,12 +92,9 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 	for _, gene := range genesWithin.Features {
 		id := gene.GeneId
 
-		// println!(
-		//     "{} {} {} {} {}",
-		//     gene.gene_id, gene.GeneSymbol, gene.Start, gene.End, gene.strand
-		// );
-
 		idMap[id] = gene.GeneSymbol
+
+		log.Debug().Msgf("%s %s %v", gene.GeneId, gene.GeneSymbol, gene)
 
 		//let labels = annotate.classify_location(location, gene);
 
@@ -107,19 +106,22 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 
 		isExon := len(exons.Features) > 0
 
-		isPromoter := (gene.Strand == "+" && mid >= gene.Start-annotateDb.TSSRegion.Offset5P() && mid <= gene.Start+annotateDb.TSSRegion.Offset3P()) || (gene.Strand == "-" && mid >= gene.End-annotateDb.TSSRegion.Offset3P() && mid <= gene.End+annotateDb.TSSRegion.Offset5P())
+		isPromoter := (gene.Strand == "+" && mid >= gene.Location.Start-annotateDb.TSSRegion.Offset5P() &&
+			mid <= gene.Location.Start+annotateDb.TSSRegion.Offset3P()) ||
+			(gene.Strand == "-" && mid >= gene.Location.End-annotateDb.TSSRegion.Offset3P() &&
+				mid <= gene.Location.End+annotateDb.TSSRegion.Offset5P())
 
-		isIntronic := mid >= gene.Start && mid <= gene.End
+		isIntronic := mid >= gene.Location.Start && mid <= gene.Location.End
 
 		var d int = 0
 
 		if gene.Strand == "+" {
-			d = int(gene.Start) - int(mid)
+			d = int(gene.Location.Start) - int(mid)
 		} else {
-			d = int(gene.End) - int(mid)
+			d = int(gene.Location.End) - int(mid)
 		}
 
-		//fmt.Printf("%d %d %d %s\n", d, gene.End, mid, gene.GeneSymbol)
+		//fmt.Printf("%d %d %d %s\n", d, gene.Location.End, mid, gene.GeneSymbol)
 
 		// update by inserting default case and then updating
 
@@ -128,19 +130,22 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 		prom, ok := promoterMap[id]
 
 		if ok {
+			// we test all transcripts to see if we can classify the gene
+			// hence we OR the tests since we want to make as many of
+			// them true as possible
 			prom.IsIntronic = prom.IsIntronic || isIntronic
 			prom.IsPromoter = prom.IsPromoter || isPromoter
 			prom.IsExon = prom.IsExon || len(exons.Features) > 0
 
 			// record the feature that is closest to our site
 			if absD < prom.AbsD {
-				prom.Feature = &gene
+				prom.Feature = gene
 				prom.D = d
 				prom.AbsD = absD
 			}
 		} else {
 			promoterMap[id] = &GeneProm{
-				Feature:    &gene,
+				Feature:    gene,
 				IsPromoter: isPromoter,
 				IsIntronic: isIntronic,
 				IsExon:     isExon,
@@ -168,43 +173,48 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 
 	slices.Sort(distances)
 
-	ids := []string{}
+	ids := make([]string, 0, len(distances))
 
 	for _, d := range distances {
 		dids := distMap[d]
 
+		// sort the gene ids
 		slices.Sort(dids)
 
 		ids = append(ids, dids...)
 	}
 
-	geneSymbols := []string{}
+	geneSymbols := make([]string, 0, len(ids))
+	geneStrands := make([]string, 0, len(ids))
+	tssDists := make([]string, 0, len(ids))
+	featureLocations := make([]string, 0, len(ids))
+	promLabels := make([]string, 0, len(ids))
 
 	for _, id := range ids {
 		p := promoterMap[id]
-		geneSymbols = append(geneSymbols, GeneStrandLabel(idMap[id], p.Feature.Strand))
-	}
-
-	promLabels := []string{}
-
-	for _, id := range ids {
-		p := promoterMap[id]
-		promLabels = append(promLabels, PromLabel(p.IsPromoter, p.IsExon, p.IsIntronic))
-	}
-
-	tssDists := []string{}
-
-	for _, id := range ids {
-		p := promoterMap[id]
+		geneSymbols = append(geneSymbols, idMap[id]) //GeneStrandLabel(idMap[id], p.Feature.Strand))
+		geneStrands = append(geneStrands, p.Feature.Strand)
 		tssDists = append(tssDists, strconv.Itoa(p.D))
+		promLabels = append(promLabels, PromLabel(p.IsPromoter, p.IsExon, p.IsIntronic))
+		featureLocations = append(featureLocations, p.Feature.Location.String())
 	}
 
-	featureLocations := []string{}
+	// for _, id := range ids {
+	// 	p := promoterMap[id]
 
-	for _, id := range ids {
-		p := promoterMap[id]
-		featureLocations = append(featureLocations, p.Feature.ToLocation().String())
-	}
+	// }
+
+	// tssDists := make([]string, 0, len(ids))
+
+	// for _, id := range ids {
+	// 	p := promoterMap[id]
+	// 	tssDists = append(tssDists, strconv.Itoa(p.D))
+	// }
+
+	// for _, id := range ids {
+	// 	p := promoterMap[id]
+	// 	featureLocations = append(featureLocations, p.Feature.ToLocation().String())
+	// }
 
 	if len(ids) == 0 {
 		ids = append(ids, NA)
@@ -213,30 +223,32 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 		featureLocations = append(featureLocations, NA)
 	}
 
-	closestGenes, err := annotateDb.GeneDb.ClosestGenes(location, annotateDb.N, Gene)
+	closestGenes, err := annotateDb.GeneDb.ClosestGenes(location, annotateDb.N, LEVEL_GENE)
 
 	if err != nil {
 		return nil, err
 	}
 
-	closestGeneList := []*ClosestGene{}
+	//closestGeneList := make([]*ClosestGene, 0, len(closestGenes.Features)) //[]*ClosestGene{}
 
 	for _, cg := range closestGenes.Features {
-		label := annotateDb.ClassifyLocation(location, &cg)
+		cg.PromLabel = annotateDb.ClassifyLocation(location, cg)
 
-		closestGeneList = append(closestGeneList, &ClosestGene{Feature: &cg,
-			TssDist:   cg.TssDist,
-			PromLabel: label})
+		// closestGeneList = append(closestGeneList, &ClosestGene{Feature: &cg,
+		// 	TssDist:   cg.TssDist,
+		// 	PromLabel: label})
 	}
 
 	annotation := GeneAnnotation{
-		Location:     location,
-		GeneIds:      strings.Join(ids, FEATURE_SEP),
-		GeneSymbols:  strings.Join(geneSymbols, FEATURE_SEP),
-		PromLabels:   strings.Join(promLabels, FEATURE_SEP),
-		Dists:        strings.Join(tssDists, FEATURE_SEP),
-		Locations:    strings.Join(featureLocations, FEATURE_SEP),
-		ClosestGenes: closestGeneList,
+		Location:    location,
+		GeneIds:     strings.Join(ids, OUTPUT_FEATURE_SEP),
+		GeneSymbols: strings.Join(geneSymbols, OUTPUT_FEATURE_SEP),
+		GeneStrands: strings.Join(geneStrands, OUTPUT_FEATURE_SEP),
+		PromLabels:  strings.Join(promLabels, OUTPUT_FEATURE_SEP),
+
+		TSSDists:     strings.Join(tssDists, OUTPUT_FEATURE_SEP),
+		Locations:    strings.Join(featureLocations, OUTPUT_FEATURE_SEP),
+		ClosestGenes: closestGenes.Features,
 	}
 
 	return &annotation, nil
@@ -244,27 +256,27 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 
 func (annotateDb *AnnotateDb) ClassifyLocation(location *dna.Location, feature *GenomicFeature) string {
 	mid := location.Mid()
-	var s uint
+	var start uint
 
 	if feature.Strand == "+" {
-		s = feature.Start - annotateDb.TSSRegion.Offset5P()
+		start = feature.Location.Start - annotateDb.TSSRegion.Offset5P()
 	} else {
-		s = feature.Start
+		start = feature.Location.Start
 	}
 
-	var e uint
+	var end uint
 
 	if feature.Strand == "-" {
-		e = feature.End + annotateDb.TSSRegion.Offset5P()
+		end = feature.Location.End + annotateDb.TSSRegion.Offset5P()
 	} else {
-		e = feature.End
+		end = feature.Location.End
 	}
 
-	if location.Start > e || location.End < s {
+	if location.Start > end || location.End < start {
 		return INTERGENIC
 	}
 
-	isPromoter := (feature.Strand == "+" && mid >= s && mid <= feature.Start+annotateDb.TSSRegion.Offset3P()) || (feature.Strand == "-" && mid >= feature.End-annotateDb.TSSRegion.Offset3P() && mid <= e)
+	isPromoter := (feature.Strand == "+" && mid >= start && mid <= feature.Location.Start+annotateDb.TSSRegion.Offset3P()) || (feature.Strand == "-" && mid >= feature.Location.End-annotateDb.TSSRegion.Offset3P() && mid <= end)
 
 	exons, err := annotateDb.GeneDb.InExon(location, feature.GeneId)
 
@@ -274,22 +286,23 @@ func (annotateDb *AnnotateDb) ClassifyLocation(location *dna.Location, feature *
 
 	isExon := len(exons.Features) > 0
 
-	isIntronic := mid >= feature.Start && mid <= feature.End
+	isIntronic := mid >= feature.Location.Start && mid <= feature.Location.End
 
 	return PromLabel(isPromoter, isExon, isIntronic)
 }
 
-func GeneStrandLabel(id string, strand string) string {
-	return fmt.Sprintf("%s|%s", id, strand)
+func GeneWithStrandLabel(id string, strand string) string {
+	return fmt.Sprintf("%s:%s", id, strand)
 }
 
 func PromLabel(isPromoter bool, isExon bool, isIntronic bool) string {
-	labels := []string{}
+	labels := make([]string, 0, 3)
 
 	if isPromoter {
 		labels = append(labels, PROMOTER)
 	}
 
+	// favor exonic over intronic
 	if isExon {
 		labels = append(labels, EXONIC)
 	} else {
@@ -298,5 +311,5 @@ func PromLabel(isPromoter bool, isExon bool, isIntronic bool) string {
 		}
 	}
 
-	return strings.Join(labels, LABEL_SEP)
+	return strings.Join(labels, GROUP_SEP)
 }

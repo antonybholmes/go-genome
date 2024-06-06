@@ -14,43 +14,36 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const WITHIN_GENE_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, ?1 - stranded_start
+const WITHIN_GENE_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, ?1 - tss
 	FROM genes
- 	WHERE level=?2 AND chr=?3 AND ((start <= ?4 AND end >= ?4) OR (start <= ?5 AND end >= ?5))
+ 	WHERE level = ?2 AND chr= ?3 AND ((start <= ?4 AND end >= ?4) OR (start <= ?5 AND end >= ?5))
  	ORDER BY start ASC`
 
-const CLOSEST_GENE_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, ?1 - stranded_start
+const CLOSEST_GENE_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, ?1 - tss
 	FROM genes
  	WHERE level = ?2 AND chr = ?3
- 	ORDER BY ABS(stranded_start - ?1)
+ 	ORDER BY ABS(tss - ?1)
  	LIMIT ?4`
 
-//  rows, err := genedb.closestGeneStmt.Query(mid,
-// 	level,
-// 	location.Chr,
-// 	n)
-
-const WITHIN_GENE_AND_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, ?1 - stranded_start 
+const WITHIN_GENE_AND_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, ?1 - tss as tss_dist 
 	FROM genes 
- 	WHERE level = ?2 AND chr = ?3 AND ((start - ?6 <= ?4 AND end + ?6 >= ?4) OR (start - ?6 <= ?5 AND end + ?6 >= ?5)) 
+ 	WHERE level = ?2 AND 
+	chr = ?3 AND 
+	(
+		(strand = '+' AND ((start - ?6 <= ?4 AND end >= ?4) OR (start - ?6 <= ?5 AND end >= ?5))) OR
+		(strand = '-' AND ((start <= ?4 AND end + ?6 >= ?4) OR (start <= ?5 AND end + ?6 >= ?5)))
+	)
  	ORDER BY start ASC`
-
-//  mid,
-//  level,
-//  location.Chr,
-//  location.Start,
-//  location.End,
-//  pad)
 
 const IN_EXON_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, start - ?1 
 	FROM genes 
- 	WHERE level=3 AND gene_id=?2 AND chr=?3 AND ((start <= ?4 AND end >= ?4) OR (start <= ?5 AND end >= ?5)) 
+ 	WHERE level = 3 AND gene_id = ?2 AND chr = ?3 AND ((start <= ?4 AND end >= ?4) OR (start <= ?5 AND end >= ?5)) 
  	ORDER BY start ASC`
 
-const IN_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, start - ? 
-	FROM genes 
- 	WHERE level=2 AND gene_id=? AND chr=? AND ? >= stranded_start - ? AND ? <= stranded_start + ? 
- 	ORDER BY start ASC`
+// const IN_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, start - ?
+// 	FROM genes
+//  	WHERE level = 2 AND gene_id = ? AND chr = ? AND ? >= stranded_start - ? AND ? <= stranded_start + ?
+//  	ORDER BY start ASC`
 
 type GenomicFeature struct {
 	Id       uint          `json:"-"`
@@ -81,7 +74,7 @@ func (feature *GenomicFeature) TSS() *dna.Location {
 }
 
 type GenomicFeatures struct {
-	Location string            `json:"location"`
+	Location *dna.Location     `json:"location"`
 	Level    string            `json:"level"`
 	Features []*GenomicFeature `json:"features"`
 }
@@ -96,17 +89,6 @@ const (
 	LEVEL_EXON       Level = 3
 )
 
-func ParseLevel(level string) Level {
-	switch level {
-	case "t", "transcript", "2":
-		return LEVEL_TRANSCRIPT
-	case "e", "exon", "3":
-		return LEVEL_EXON
-	default:
-		return LEVEL_GENE
-	}
-}
-
 func (level Level) String() string {
 	switch level {
 	case LEVEL_EXON:
@@ -115,6 +97,17 @@ func (level Level) String() string {
 		return "Transcript"
 	default:
 		return "Gene"
+	}
+}
+
+func ParseLevel(level string) Level {
+	switch level {
+	case "t", "tran", "transcript", "2":
+		return LEVEL_TRANSCRIPT
+	case "e", "ex", "exon", "3":
+		return LEVEL_EXON
+	default:
+		return LEVEL_GENE
 	}
 }
 
@@ -327,6 +320,8 @@ func rowsToRecords(location *dna.Location, rows *sql.Rows, level Level) (*Genomi
 	var geneSymbol string
 	var d int
 
+	// 10 seems a reasonable guess for the number of features we might see, just
+	// to reduce slice reallocation
 	var features = make([]*GenomicFeature, 0, 10)
 
 	for rows.Next() {
@@ -348,5 +343,5 @@ func rowsToRecords(location *dna.Location, rows *sql.Rows, level Level) (*Genomi
 		features = append(features, &feature)
 	}
 
-	return &GenomicFeatures{Location: location.String(), Level: level.String(), Features: features}, nil
+	return &GenomicFeatures{Location: location, Level: level.String(), Features: features}, nil
 }

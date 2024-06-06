@@ -165,7 +165,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 	}
 
 	// now put the ids in distance order
-	var distances []uint
+	distances := make([]uint, 0, len(distMap))
 
 	for d := range distMap {
 		distances = append(distances, d)
@@ -184,19 +184,32 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 		ids = append(ids, dids...)
 	}
 
-	geneSymbols := make([]string, 0, len(ids))
-	geneStrands := make([]string, 0, len(ids))
-	tssDists := make([]string, 0, len(ids))
-	featureLocations := make([]string, 0, len(ids))
-	promLabels := make([]string, 0, len(ids))
+	nids := len(ids)
+	// arrays are always at least 1 element since if nothing is found
+	// we put NA
+	n := math.IntMax(1, nids)
+	geneSymbols := make([]string, n)
+	geneStrands := make([]string, n)
+	tssDists := make([]string, n)
+	featureLocations := make([]string, n)
+	promLabels := make([]string, n)
 
-	for _, id := range ids {
-		p := promoterMap[id]
-		geneSymbols = append(geneSymbols, idMap[id]) //GeneStrandLabel(idMap[id], p.Feature.Strand))
-		geneStrands = append(geneStrands, p.Feature.Strand)
-		tssDists = append(tssDists, strconv.Itoa(p.D))
-		promLabels = append(promLabels, PromLabel(p.IsPromoter, p.IsExon, p.IsIntronic))
-		featureLocations = append(featureLocations, p.Feature.Location.String())
+	if nids > 0 {
+		for iid, id := range ids {
+			p := promoterMap[id]
+			geneSymbols[iid] = idMap[id] //GeneStrandLabel(idMap[id], p.Feature.Strand))
+			geneStrands[iid] = p.Feature.Strand
+			tssDists[iid] = strconv.Itoa(p.D)
+			promLabels[iid] = PromLabel(p.IsPromoter, p.IsExon, p.IsIntronic)
+			featureLocations[iid] = p.Feature.Location.String()
+		}
+	} else {
+		ids = append(ids, NA)
+		geneSymbols[0] = NA
+		geneStrands[0] = NA
+		tssDists[0] = NA
+		featureLocations[0] = NA
+		promLabels[0] = NA
 	}
 
 	// for _, id := range ids {
@@ -215,13 +228,6 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 	// 	p := promoterMap[id]
 	// 	featureLocations = append(featureLocations, p.Feature.ToLocation().String())
 	// }
-
-	if len(ids) == 0 {
-		ids = append(ids, NA)
-		geneSymbols = append(geneSymbols, NA)
-		tssDists = append(tssDists, NA)
-		featureLocations = append(featureLocations, NA)
-	}
 
 	closestGenes, err := annotateDb.GeneDb.ClosestGenes(location, annotateDb.N, LEVEL_GENE)
 

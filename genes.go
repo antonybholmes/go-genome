@@ -14,6 +14,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const GENE_INFO_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol
+	FROM genes
+ 	WHERE level = 1 AND (gene_id = ?1 OR gene_symbol = ?1)`
+
 const WITHIN_GENE_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, ?1 - tss
 	FROM genes
  	WHERE level = ?2 AND chr= ?3 AND ((start <= ?4 AND end >= ?4) OR (start <= ?5 AND end >= ?5))

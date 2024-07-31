@@ -9,7 +9,7 @@ import (
 	"github.com/antonybholmes/go-dna"
 	"github.com/rs/zerolog/log"
 
-	"github.com/antonybholmes/go-math"
+	"github.com/antonybholmes/go-basemath"
 )
 
 const NA string = "n/a"
@@ -76,7 +76,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 	genesWithin, err := annotateDb.GeneDb.WithinGenesAndPromoter(
 		location,
 		LEVEL_TRANSCRIPT,
-		math.UintMax(annotateDb.TSSRegion.Offset5P(), annotateDb.TSSRegion.Offset3P()),
+		basemath.UintMax(annotateDb.TSSRegion.Offset5P(), annotateDb.TSSRegion.Offset3P()),
 	)
 
 	if err != nil {
@@ -125,7 +125,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 
 		// update by inserting default case and then updating
 
-		absD := uint(math.AbsInt(d))
+		absD := uint(basemath.AbsInt(d))
 
 		prom, ok := promoterMap[id]
 
@@ -187,7 +187,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 	nids := len(ids)
 	// arrays are always at least 1 element since if nothing is found
 	// we put NA
-	n := math.IntMax(1, nids)
+	n := basemath.IntMax(1, nids)
 	geneSymbols := make([]string, n)
 	geneStrands := make([]string, n)
 	tssDists := make([]string, n)

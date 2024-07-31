@@ -2,13 +2,13 @@ module github.com/antonybholmes/go-genes
 
 go 1.22.2
 
-replace github.com/antonybholmes/go-math => ../go-math
+replace github.com/antonybholmes/go-basemath => ../go-basemath
 
 replace github.com/antonybholmes/go-dna => ../go-dna
 
 replace github.com/antonybholmes/go-sys => ../go-sys
 
-require github.com/antonybholmes/go-math v0.0.0-20240215163921-12bb7e52185c
+require github.com/antonybholmes/go-basemath v0.0.0-20240215163921-12bb7e52185c
 
 require github.com/antonybholmes/go-dna v0.0.0-20240726180729-b94c3b7b50fa
 

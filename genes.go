@@ -50,15 +50,13 @@ const IN_EXON_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, s
 //  	ORDER BY start ASC`
 
 type GenomicFeature struct {
-	Id       uint          `json:"-"`
-	Location *dna.Location `json:"loc"`
-	//Start      uint   `json:"start"`
-	//End        uint   `json:"end"`
-	Strand     string `json:"strand"`
-	GeneId     string `json:"geneId"`
-	GeneSymbol string `json:"geneSymbol"`
-	TssDist    int    `json:"tssDist"`
-	PromLabel  string `json:"promLabel"`
+	Location   *dna.Location `json:"loc"`
+	Strand     string        `json:"strand"`
+	GeneId     string        `json:"geneId"`
+	GeneSymbol string        `json:"geneSymbol"`
+	PromLabel  string        `json:"promLabel"`
+	Id         uint          `json:"-"`
+	TssDist    int           `json:"tssDist"`
 }
 
 // func (feature *GenomicFeature) ToLocation() *dna.Location {
@@ -116,8 +114,8 @@ func ParseLevel(level string) Level {
 }
 
 type GeneDBCache struct {
-	dir      string
 	cacheMap map[string]*GeneDB
+	dir      string
 }
 
 func NewGeneDBCache(dir string) *GeneDBCache {
@@ -148,7 +146,7 @@ func NewGeneDBCache(dir string) *GeneDBCache {
 
 	log.Debug().Msgf("---- end ----")
 
-	return &GeneDBCache{dir, cacheMap}
+	return &GeneDBCache{dir: dir, cacheMap: cacheMap}
 }
 
 func (cache *GeneDBCache) Dir() string {

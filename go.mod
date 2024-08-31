@@ -10,7 +10,7 @@ replace github.com/antonybholmes/go-sys => ../go-sys
 
 require github.com/antonybholmes/go-basemath v0.0.0-20240825181410-a6174a39116c
 
-require github.com/antonybholmes/go-dna v0.0.0-20240825181410-efbbb323d020
+require github.com/antonybholmes/go-dna v0.0.0-20240830030422-fdb7452d202d
 
 require (
 	github.com/antonybholmes/go-sys v0.0.0-20240825181411-a5bc491d0736

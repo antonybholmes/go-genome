@@ -13,7 +13,7 @@ require github.com/antonybholmes/go-basemath v0.0.0-20240825181410-a6174a39116c
 require github.com/antonybholmes/go-dna v0.0.0-20240906031005-7e79fcf536ca
 
 require (
-	github.com/antonybholmes/go-sys v0.0.0-20240901191116-4f230479c4a8
+	github.com/antonybholmes/go-sys v0.0.0-20240927192250-5d2fd7cd5f40
 	github.com/rs/zerolog v1.33.0
 )
 

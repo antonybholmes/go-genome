@@ -44,6 +44,21 @@ const IN_EXON_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, s
  	WHERE level = 3 AND gene_id = ?2 AND chr = ?3 AND ((start <= ?4 AND end >= ?4) OR (start <= ?5 AND end >= ?5)) 
  	ORDER BY start ASC`
 
+const OVERLAPPING_GENES_FROM_LOCATION_SQL = `SELECT id, level, chr, start, end, strand, gene_symbol, gene_id 
+	FROM genes 
+	WHERE level = 1 AND chr = ?1 AND ((start <= ?2 AND end >= ?2) OR (start <= ?3 AND end >= ?3)) 
+	ORDER BY start`
+
+const OVERLAPPING_TRANSCRIPTS_FROM_LOCATION_SQL = `SELECT id, level, chr, start, end, strand, transcript_id 
+	FROM genes 
+	WHERE level = 2 AND gene_id = ?1
+	ORDER BY start`
+
+const OVERLAPPING_EXONS_FROM_LOCATION_SQL = `SELECT id, level, chr, start, end, strand, exon_id 
+	FROM genes 
+	WHERE level = 3 AND transcript_id = ?1
+	ORDER BY start`
+
 // const IN_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, start - ?
 // 	FROM genes
 //  	WHERE level = 2 AND gene_id = ? AND chr = ? AND ? >= stranded_start - ? AND ? <= stranded_start + ?
@@ -76,9 +91,19 @@ func (feature *GenomicFeature) TSS() *dna.Location {
 }
 
 type GenomicFeatures struct {
-	Location *dna.Location     `json:"location"`
+	Location *dna.Location `json:"location"`
+	//Id       string        `json:"id,omitempty"`
+	//Name     string        `json:"name,omitempty"`
 	Level    string            `json:"level"`
 	Features []*GenomicFeature `json:"features"`
+}
+
+type GenomicSearchFeature struct {
+	Location *dna.Location           `json:"location"`
+	Id       string                  `json:"id,omitempty"`
+	Name     string                  `json:"name,omitempty"`
+	Level    string                  `json:"level"`
+	Children []*GenomicSearchFeature `json:"children"`
 }
 
 //var ERROR_FEATURES = GenomicFeatures{Location: "", Level: "", Features: []GenomicFeature{}}
@@ -185,25 +210,126 @@ func (cache *GeneDBCache) Close() {
 }
 
 type GeneDB struct {
-	db                    *sql.DB
-	withinGeneStmt        *sql.Stmt
-	withinGeneAndPromStmt *sql.Stmt
-	inExonStmt            *sql.Stmt
-	closestGeneStmt       *sql.Stmt
+	db *sql.DB
+	//withinGeneStmt *sql.Stmt
+	//withinGeneAndPromStmt *sql.Stmt
+	//inExonStmt      *sql.Stmt
+	//closestGeneStmt *sql.Stmt
 }
 
 func NewGeneDB(file string) *GeneDB {
 	db := sys.Must(sql.Open("sqlite3", file))
 
-	return &GeneDB{db: db,
-		withinGeneStmt:        sys.Must(db.Prepare(WITHIN_GENE_SQL)),
-		withinGeneAndPromStmt: sys.Must(db.Prepare(WITHIN_GENE_AND_PROMOTER_SQL)),
-		inExonStmt:            sys.Must(db.Prepare(IN_EXON_SQL)),
-		closestGeneStmt:       sys.Must(db.Prepare(CLOSEST_GENE_SQL))}
+	return &GeneDB{db: db} //withinGeneStmt: sys.Must(db.Prepare(WITHIN_GENE_SQL)),
+	//withinGeneAndPromStmt: sys.Must(db.Prepare(WITHIN_GENE_AND_PROMOTER_SQL)),
+	//inExonStmt:      sys.Must(db.Prepare(IN_EXON_SQL)),
+	//closestGeneStmt: sys.Must(db.Prepare(CLOSEST_GENE_SQL))
+
 }
 
 func (genedb *GeneDB) Close() {
 	genedb.db.Close()
+}
+
+func (genedb *GeneDB) OverlappingGenes(location *dna.Location) ([]*GenomicSearchFeature, error) {
+
+	var id uint
+	var level Level
+	var chr string
+	var start uint
+	var end uint
+	var strand string
+	var geneSymbol string
+	var geneId string
+	var transcriptId string
+	var exonId string
+
+	// 10 seems a reasonable guess for the number of features we might see, just
+	// to reduce slice reallocation
+
+	var features = make([]*GenomicSearchFeature, 0, 10)
+	var currentGene *GenomicSearchFeature
+	var currentTranscript *GenomicSearchFeature
+
+	geneRows, err := genedb.db.Query(OVERLAPPING_GENES_FROM_LOCATION_SQL,
+		location.Chr,
+		location.Start,
+		location.End)
+
+	if err != nil {
+		return nil, err //fmt.Errorf("there was an error with the database query")
+	}
+
+	defer geneRows.Close()
+
+	//var currentExon *GenomicSearchFeature
+
+	for geneRows.Next() {
+		//err := geneRows.Scan(&id, &level, &chr, &start, &end, &strand, &geneSymbol, &geneId, &transcriptId, &exonId)
+		err := geneRows.Scan(&id, &level, &chr, &start, &end, &strand, &geneSymbol, &geneId)
+
+		if err != nil {
+			return nil, err //fmt.Errorf("there was an error with the database records")
+		}
+
+		location := &dna.Location{Chr: chr, Start: start, End: end}
+
+		feature := &GenomicSearchFeature{Location: location, Level: Level(1).String(), Name: geneSymbol, Id: geneId, Children: make([]*GenomicSearchFeature, 0, 10)}
+		features = append(features, feature)
+		currentGene = feature
+
+		transcriptRows, err := genedb.db.Query(OVERLAPPING_TRANSCRIPTS_FROM_LOCATION_SQL,
+			currentGene.Id)
+
+		if err != nil {
+			return nil, err //fmt.Errorf("there was an error with the database query")
+		}
+
+		defer transcriptRows.Close()
+
+		//var currentExon *GenomicSearchFeature
+
+		for transcriptRows.Next() {
+			err := transcriptRows.Scan(&id, &level, &chr, &start, &end, &strand, &transcriptId)
+
+			if err != nil {
+				return nil, err //fmt.Errorf("there was an error with the database records")
+			}
+
+			location := &dna.Location{Chr: chr, Start: start, End: end}
+
+			feature := &GenomicSearchFeature{Location: location, Level: Level(2).String(), Id: transcriptId, Children: make([]*GenomicSearchFeature, 0, 10)}
+			currentGene.Children = append(currentGene.Children, feature)
+			currentTranscript = feature
+
+			exonRows, err := genedb.db.Query(OVERLAPPING_EXONS_FROM_LOCATION_SQL,
+				currentTranscript.Id)
+
+			if err != nil {
+				return nil, err //fmt.Errorf("there was an error with the database query")
+			}
+
+			defer exonRows.Close()
+
+			//var currentExon *GenomicSearchFeature
+
+			for exonRows.Next() {
+				err := exonRows.Scan(&id, &level, &chr, &start, &end, &strand, &exonId)
+
+				if err != nil {
+					return nil, err //fmt.Errorf("there was an error with the database records")
+				}
+
+				location := &dna.Location{Chr: chr, Start: start, End: end}
+				feature := &GenomicSearchFeature{Location: location, Level: Level(3).String(), Id: exonId, Children: make([]*GenomicSearchFeature, 0, 10)}
+				currentTranscript.Children = append(currentTranscript.Children, feature)
+
+			}
+		}
+
+	}
+
+	return features, nil
 }
 
 func (genedb *GeneDB) WithinGenes(location *dna.Location, level Level) (*GenomicFeatures, error) {
@@ -218,7 +344,7 @@ func (genedb *GeneDB) WithinGenes(location *dna.Location, level Level) (*Genomic
 	// 	location.End,
 	// 	location.End)
 
-	rows, err := genedb.withinGeneStmt.Query(
+	rows, err := genedb.db.Query(WITHIN_GENE_SQL,
 		mid,
 		level,
 		location.Chr,
@@ -248,7 +374,7 @@ func (genedb *GeneDB) WithinGenesAndPromoter(location *dna.Location, level Level
 	// 	pad,
 	// 	location.End)
 
-	rows, err := genedb.withinGeneAndPromStmt.Query(
+	rows, err := genedb.db.Query(WITHIN_GENE_AND_PROMOTER_SQL,
 		mid,
 		level,
 		location.Chr,
@@ -275,7 +401,7 @@ func (genedb *GeneDB) InExon(location *dna.Location, geneId string) (*GenomicFea
 	// 	location.End,
 	// 	location.End)
 
-	rows, err := genedb.inExonStmt.Query(
+	rows, err := genedb.db.Query(IN_EXON_SQL,
 		mid,
 		geneId,
 		location.Chr,
@@ -298,7 +424,7 @@ func (genedb *GeneDB) ClosestGenes(location *dna.Location, n uint16, level Level
 	// 	mid,
 	// 	n)
 
-	rows, err := genedb.closestGeneStmt.Query(mid,
+	rows, err := genedb.db.Query(CLOSEST_GENE_SQL, mid,
 		level,
 		location.Chr,
 		n)

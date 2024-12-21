@@ -65,13 +65,17 @@ const OVERLAPPING_EXONS_FROM_LOCATION_SQL = `SELECT id, level, chr, start, end, 
 //  	ORDER BY start ASC`
 
 type GenomicFeature struct {
-	Location   *dna.Location `json:"loc"`
-	Strand     string        `json:"strand"`
-	GeneId     string        `json:"geneId"`
-	GeneSymbol string        `json:"geneSymbol"`
-	PromLabel  string        `json:"promLabel"`
-	Id         uint          `json:"-"`
-	TssDist    int           `json:"tssDist"`
+	Location     *dna.Location     `json:"loc"`
+	Strand       string            `json:"strand"`
+	Level        string            `json:"level"`
+	GeneSymbol   string            `json:"geneSymbol,omitempty"`
+	GeneId       string            `json:"geneId,omitempty"`
+	TranscriptId string            `json:"transcriptId,omitempty"`
+	ExonId       string            `json:"exonId,omitempty"`
+	PromLabel    string            `json:"promLabel,omitempty"`
+	Children     []*GenomicFeature `json:"children,omitempty"`
+	//Id           uint              `json:"-"`
+	TssDist int `json:"tssDist,omitempty"`
 }
 
 // func (feature *GenomicFeature) ToLocation() *dna.Location {
@@ -97,16 +101,6 @@ type GenomicFeatures struct {
 	Level    string            `json:"level"`
 	Features []*GenomicFeature `json:"features"`
 }
-
-type GenomicSearchFeature struct {
-	Location *dna.Location           `json:"location"`
-	Id       string                  `json:"id,omitempty"`
-	Name     string                  `json:"name,omitempty"`
-	Level    string                  `json:"level"`
-	Children []*GenomicSearchFeature `json:"children"`
-}
-
-//var ERROR_FEATURES = GenomicFeatures{Location: "", Level: "", Features: []GenomicFeature{}}
 
 type Level uint8
 
@@ -231,7 +225,7 @@ func (genedb *GeneDB) Close() {
 	genedb.db.Close()
 }
 
-func (genedb *GeneDB) OverlappingGenes(location *dna.Location) ([]*GenomicSearchFeature, error) {
+func (genedb *GeneDB) OverlappingGenes(location *dna.Location) ([]*GenomicFeature, error) {
 
 	var id uint
 	var level Level
@@ -247,9 +241,9 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location) ([]*GenomicSearch
 	// 10 seems a reasonable guess for the number of features we might see, just
 	// to reduce slice reallocation
 
-	var features = make([]*GenomicSearchFeature, 0, 10)
-	var currentGene *GenomicSearchFeature
-	var currentTranscript *GenomicSearchFeature
+	var features = make([]*GenomicFeature, 0, 10)
+	var currentGene *GenomicFeature
+	var currentTranscript *GenomicFeature
 
 	geneRows, err := genedb.db.Query(OVERLAPPING_GENES_FROM_LOCATION_SQL,
 		location.Chr,
@@ -274,12 +268,18 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location) ([]*GenomicSearch
 
 		location := &dna.Location{Chr: chr, Start: start, End: end}
 
-		feature := &GenomicSearchFeature{Location: location, Level: Level(1).String(), Name: geneSymbol, Id: geneId, Children: make([]*GenomicSearchFeature, 0, 10)}
+		feature := &GenomicFeature{Location: location,
+			Level:      Level(1).String(),
+			GeneSymbol: geneSymbol,
+			GeneId:     geneId,
+			Strand:     strand,
+			Children:   make([]*GenomicFeature, 0, 10)}
+
 		features = append(features, feature)
 		currentGene = feature
 
 		transcriptRows, err := genedb.db.Query(OVERLAPPING_TRANSCRIPTS_FROM_LOCATION_SQL,
-			currentGene.Id)
+			currentGene.GeneId)
 
 		if err != nil {
 			return nil, err //fmt.Errorf("there was an error with the database query")
@@ -298,12 +298,18 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location) ([]*GenomicSearch
 
 			location := &dna.Location{Chr: chr, Start: start, End: end}
 
-			feature := &GenomicSearchFeature{Location: location, Level: Level(2).String(), Id: transcriptId, Children: make([]*GenomicSearchFeature, 0, 10)}
+			feature := &GenomicFeature{Location: location,
+				Level:        Level(2).String(),
+				GeneSymbol:   geneSymbol,
+				GeneId:       geneId,
+				TranscriptId: transcriptId,
+				Strand:       strand,
+				Children:     make([]*GenomicFeature, 0, 10)}
 			currentGene.Children = append(currentGene.Children, feature)
 			currentTranscript = feature
 
 			exonRows, err := genedb.db.Query(OVERLAPPING_EXONS_FROM_LOCATION_SQL,
-				currentTranscript.Id)
+				currentTranscript.TranscriptId)
 
 			if err != nil {
 				return nil, err //fmt.Errorf("there was an error with the database query")
@@ -321,13 +327,21 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location) ([]*GenomicSearch
 				}
 
 				location := &dna.Location{Chr: chr, Start: start, End: end}
-				feature := &GenomicSearchFeature{Location: location, Level: Level(3).String(), Id: exonId, Children: make([]*GenomicSearchFeature, 0, 10)}
+				feature := &GenomicFeature{Location: location,
+					Level:        Level(3).String(),
+					GeneSymbol:   geneSymbol,
+					GeneId:       geneId,
+					TranscriptId: transcriptId,
+					ExonId:       exonId,
+					Strand:       strand}
 				currentTranscript.Children = append(currentTranscript.Children, feature)
 
 			}
 		}
 
 	}
+
+	log.Debug().Msgf("genes %v", features[0])
 
 	return features, nil
 }
@@ -461,7 +475,7 @@ func rowsToRecords(location *dna.Location, rows *sql.Rows, level Level) (*Genomi
 
 		location = dna.NewLocation(chr, start, end)
 
-		feature := GenomicFeature{Id: id,
+		feature := GenomicFeature{
 			Location:   location,
 			Strand:     strand,
 			GeneId:     geneId,

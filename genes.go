@@ -21,7 +21,7 @@ const GENE_INFO_SQL = `SELECT id, chr, start, end, strand, gene_symbol, gene_id,
 
 const WITHIN_GENE_SQL = `SELECT id, chr, start, end, strand, gene_symbol, gene_id, transcript_id, ?1 - tss as tss_dist
 	FROM genes
- 	WHERE level = ?2 AND chr= ?3 AND ((start >= ?4 AND start <= ?5) OR (end >= ?4 AND end <= ?5) OR (start <= ?4 AND end >= ?5)) 
+ 	WHERE level = ?2 AND chr= ?3 AND (start <= ?5 AND end >= ?4)
  	ORDER BY start`
 
 const CLOSEST_GENE_SQL = `SELECT id, chr, start, end, strand, gene_symbol, gene_id, transcript_id, ?1 - tss as tss_dist
@@ -35,19 +35,21 @@ const WITHIN_GENE_AND_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_s
  	WHERE level = ?2 AND 
 	chr = ?3 AND 
 	(
-		(strand = '+' AND ((start - ?6 >= ?4 AND start - ?6 <= ?5) OR (end <= ?4 AND end <= ?5) OR (start - ?6 <= ?4 AND end >= ?5))) OR
-		(strand = '-' AND ((start <= ?4 AND start <= $5) OR (end + ?6 >= ?4 AND end + ?6 <= ?5) OR (start <= ?4 AND end + ?6 >= ?5)))
+		(strand = '+' AND (start - ?6 <= ?5 AND end >= ?4)) OR
+		(strand = '-' AND ((start >= ?5 AND end + ?6 <= ?4))
 	)
  	ORDER BY start`
 
 const IN_EXON_SQL = `SELECT id, chr, start, end, strand, gene_symbol, gene_id, transcript_id, ?1 - tss as tss_dist
 	FROM genes 
- 	WHERE level = 3 AND gene_id = ?2 AND chr = ?3 AND ((start >= ?4 AND start <= ?5) OR (end >= ?4 AND end <= ?5) OR (start <= ?4 AND end >= ?5)) 
+ 	WHERE level = 3 AND gene_id = ?2 AND chr = ?3 AND (start <= ?5 AND end >= ?4)
  	ORDER BY start`
 
+// If start is less x2 and end is greater than x1, it constrains the feature to be overlapping
+// our location
 const OVERLAPPING_GENES_FROM_LOCATION_SQL = `SELECT id, level, chr, start, end, strand, gene_symbol, gene_id 
 	FROM genes 
-	WHERE level = 1 AND chr = ?1 ((start >= ?2 AND start <= ?3) OR (end >= ?2 AND end <= ?3) OR (start <= ?2 AND end >= ?3))
+	WHERE level = 1 AND chr = ?1 AND (start <= ?3 AND end >= ?2)
 	ORDER BY start`
 
 const OVERLAPPING_TRANSCRIPTS_FROM_LOCATION_SQL = `SELECT id, level, chr, start, end, strand, transcript_id 

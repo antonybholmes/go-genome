@@ -14,22 +14,23 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const GENE_INFO_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol
+const GENE_INFO_SQL = `SELECT id, chr, start, end, strand, gene_symbol, gene_id, transcript_id, 0 as tss_dist
 	FROM genes
- 	WHERE level = 1 AND (gene_id = ?1 OR gene_symbol = ?1)`
+ 	WHERE level = ?1 AND (gene_symbol = ?2 OR gene_id = ?2 OR transcript_id = ?2)
+	ORDER BY chr, start`
 
-const WITHIN_GENE_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, ?1 - tss
+const WITHIN_GENE_SQL = `SELECT id, chr, start, end, strand, gene_symbol, gene_id, transcript_id, ?1 - tss as tss_dist
 	FROM genes
  	WHERE level = ?2 AND chr= ?3 AND ((start <= ?4 AND end >= ?4) OR (start <= ?5 AND end >= ?5))
- 	ORDER BY start ASC`
+ 	ORDER BY start`
 
-const CLOSEST_GENE_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, ?1 - tss
+const CLOSEST_GENE_SQL = `SELECT id, chr, start, end, strand, gene_symbol, gene_id, transcript_id, ?1 - tss as tss_dist
 	FROM genes
  	WHERE level = ?2 AND chr = ?3
  	ORDER BY ABS(tss - ?1)
  	LIMIT ?4`
 
-const WITHIN_GENE_AND_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, ?1 - tss as tss_dist 
+const WITHIN_GENE_AND_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_symbol, gene_id, transcript_id, ?1 - tss as tss_dist 
 	FROM genes 
  	WHERE level = ?2 AND 
 	chr = ?3 AND 
@@ -37,12 +38,12 @@ const WITHIN_GENE_AND_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_i
 		(strand = '+' AND ((start - ?6 <= ?4 AND end >= ?4) OR (start - ?6 <= ?5 AND end >= ?5))) OR
 		(strand = '-' AND ((start <= ?4 AND end + ?6 >= ?4) OR (start <= ?5 AND end + ?6 >= ?5)))
 	)
- 	ORDER BY start ASC`
+ 	ORDER BY start`
 
-const IN_EXON_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, start - ?1 
+const IN_EXON_SQL = `SELECT id, chr, start, end, strand, gene_symbol, gene_id, transcript_id, ?1 - tss as tss_dist
 	FROM genes 
  	WHERE level = 3 AND gene_id = ?2 AND chr = ?3 AND ((start <= ?4 AND end >= ?4) OR (start <= ?5 AND end >= ?5)) 
- 	ORDER BY start ASC`
+ 	ORDER BY start`
 
 const OVERLAPPING_GENES_FROM_LOCATION_SQL = `SELECT id, level, chr, start, end, strand, gene_symbol, gene_id 
 	FROM genes 
@@ -59,7 +60,7 @@ const OVERLAPPING_EXONS_FROM_LOCATION_SQL = `SELECT id, level, chr, start, end, 
 	WHERE level = 3 AND transcript_id = ?1
 	ORDER BY start`
 
-// const IN_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, start - ?
+// const IN_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_symbol, gene_id, transcript_id, start - ?
 // 	FROM genes
 //  	WHERE level = 2 AND gene_id = ? AND chr = ? AND ? >= stranded_start - ? AND ? <= stranded_start + ?
 //  	ORDER BY start ASC`
@@ -341,7 +342,25 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location) ([]*GenomicFeatur
 
 	}
 
-	log.Debug().Msgf("genes %v", features[0])
+	return features, nil
+}
+
+func (genedb *GeneDB) GeneInfo(search string, level Level) ([]*GenomicFeature, error) {
+
+	rows, err := genedb.db.Query(GENE_INFO_SQL,
+
+		level,
+		search)
+
+	if err != nil {
+		return nil, err //fmt.Errorf("there was an error with the database query")
+	}
+
+	features, err := rowsToRecords(rows, level)
+
+	if err != nil {
+		return nil, err //fmt.Errorf("there was an error with the database query")
+	}
 
 	return features, nil
 }
@@ -369,7 +388,7 @@ func (genedb *GeneDB) WithinGenes(location *dna.Location, level Level) (*Genomic
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
-	return rowsToRecords(location, rows, level)
+	return rowsToFeatures(location, rows, level)
 }
 
 func (genedb *GeneDB) WithinGenesAndPromoter(location *dna.Location, level Level, pad uint) (*GenomicFeatures, error) {
@@ -400,7 +419,7 @@ func (genedb *GeneDB) WithinGenesAndPromoter(location *dna.Location, level Level
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
-	return rowsToRecords(location, rows, level)
+	return rowsToFeatures(location, rows, level)
 }
 
 func (genedb *GeneDB) InExon(location *dna.Location, geneId string) (*GenomicFeatures, error) {
@@ -426,7 +445,7 @@ func (genedb *GeneDB) InExon(location *dna.Location, geneId string) (*GenomicFea
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
-	return rowsToRecords(location, rows, LEVEL_EXON)
+	return rowsToFeatures(location, rows, LEVEL_EXON)
 }
 
 func (genedb *GeneDB) ClosestGenes(location *dna.Location, n uint16, level Level) (*GenomicFeatures, error) {
@@ -447,10 +466,23 @@ func (genedb *GeneDB) ClosestGenes(location *dna.Location, n uint16, level Level
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
-	return rowsToRecords(location, rows, level)
+	return rowsToFeatures(location, rows, level)
 }
 
-func rowsToRecords(location *dna.Location, rows *sql.Rows, level Level) (*GenomicFeatures, error) {
+func rowsToFeatures(location *dna.Location, rows *sql.Rows, level Level) (*GenomicFeatures, error) {
+
+	// 10 seems a reasonable guess for the number of features we might see, just
+	// to reduce slice reallocation
+	features, err := rowsToRecords(rows, level)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &GenomicFeatures{Location: location, Level: level.String(), Features: features}, nil
+}
+
+func rowsToRecords(rows *sql.Rows, level Level) ([]*GenomicFeature, error) {
 	defer rows.Close()
 
 	var id uint
@@ -460,6 +492,7 @@ func rowsToRecords(location *dna.Location, rows *sql.Rows, level Level) (*Genomi
 	var strand string
 	var geneId string
 	var geneSymbol string
+	var transcriptId string
 	var d int
 
 	// 10 seems a reasonable guess for the number of features we might see, just
@@ -467,23 +500,25 @@ func rowsToRecords(location *dna.Location, rows *sql.Rows, level Level) (*Genomi
 	var features = make([]*GenomicFeature, 0, 10)
 
 	for rows.Next() {
-		err := rows.Scan(&id, &chr, &start, &end, &strand, &geneId, &geneSymbol, &d)
+		err := rows.Scan(&id, &chr, &start, &end, &strand, &geneSymbol, &geneId, &transcriptId, &d)
 
 		if err != nil {
 			return nil, err //fmt.Errorf("there was an error with the database records")
 		}
 
-		location = dna.NewLocation(chr, start, end)
+		location := dna.NewLocation(chr, start, end)
 
 		feature := GenomicFeature{
-			Location:   location,
-			Strand:     strand,
-			GeneId:     geneId,
-			GeneSymbol: geneSymbol,
-			TssDist:    d}
+			Location:     location,
+			Strand:       strand,
+			GeneId:       geneId,
+			GeneSymbol:   geneSymbol,
+			TranscriptId: transcriptId,
+			Level:        level.String(),
+			TssDist:      d}
 
 		features = append(features, &feature)
 	}
 
-	return &GenomicFeatures{Location: location, Level: level.String(), Features: features}, nil
+	return features, nil
 }

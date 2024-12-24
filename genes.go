@@ -16,7 +16,7 @@ import (
 
 const GENE_INFO_SQL = `SELECT id, chr, start, end, strand, gene_symbol, gene_id, transcript_id, 0 as tss_dist
 	FROM genes
- 	WHERE level = ?1 AND (gene_symbol = ?2 OR gene_id = ?2 OR transcript_id = ?2)
+ 	WHERE level = ?1 AND (LOWER(gene_symbol) = ?2 OR LOWER(gene_id) = ?2 OR LOWER(transcript_id) = ?2)
 	ORDER BY chr, start`
 
 const WITHIN_GENE_SQL = `SELECT id, chr, start, end, strand, gene_symbol, gene_id, transcript_id, ?1 - tss as tss_dist
@@ -349,8 +349,10 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location) ([]*GenomicFeatur
 
 func (genedb *GeneDB) GeneInfo(search string, level Level) ([]*GenomicFeature, error) {
 
-	rows, err := genedb.db.Query(GENE_INFO_SQL,
+	// case insensitive search
+	search = strings.ToLower(search)
 
+	rows, err := genedb.db.Query(GENE_INFO_SQL,
 		level,
 		search)
 

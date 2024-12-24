@@ -36,7 +36,7 @@ const WITHIN_GENE_AND_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_s
 	chr = ?3 AND 
 	(
 		(strand = '+' AND (start - ?6 <= ?5 AND end >= ?4)) OR
-		(strand = '-' AND ((start >= ?5 AND end + ?6 <= ?4))
+		(strand = '-' AND (start >= ?5 AND end + ?6 <= ?4))
 	)
  	ORDER BY start`
 
@@ -209,7 +209,7 @@ func (cache *GeneDBCache) Close() {
 type GeneDB struct {
 	db *sql.DB
 	//withinGeneStmt *sql.Stmt
-	//withinGeneAndPromStmt *sql.Stmt
+	withinGeneAndPromStmt *sql.Stmt
 	//inExonStmt      *sql.Stmt
 	//closestGeneStmt *sql.Stmt
 }
@@ -217,8 +217,9 @@ type GeneDB struct {
 func NewGeneDB(file string) *GeneDB {
 	db := sys.Must(sql.Open("sqlite3", file))
 
-	return &GeneDB{db: db} //withinGeneStmt: sys.Must(db.Prepare(WITHIN_GENE_SQL)),
-	//withinGeneAndPromStmt: sys.Must(db.Prepare(WITHIN_GENE_AND_PROMOTER_SQL)),
+	return &GeneDB{db: db, //withinGeneStmt: sys.Must(db.Prepare(WITHIN_GENE_SQL)),
+		withinGeneAndPromStmt: sys.Must(db.Prepare(WITHIN_GENE_AND_PROMOTER_SQL))}
+
 	//inExonStmt:      sys.Must(db.Prepare(IN_EXON_SQL)),
 	//closestGeneStmt: sys.Must(db.Prepare(CLOSEST_GENE_SQL))
 
@@ -411,7 +412,7 @@ func (genedb *GeneDB) WithinGenesAndPromoter(location *dna.Location, level Level
 	// 	pad,
 	// 	location.End)
 
-	rows, err := genedb.db.Query(WITHIN_GENE_AND_PROMOTER_SQL,
+	rows, err := genedb.withinGeneAndPromStmt.Query(
 		mid,
 		level,
 		location.Chr,

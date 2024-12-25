@@ -349,25 +349,28 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location) ([]*GenomicFeatur
 }
 
 func (genedb *GeneDB) GeneInfo(search string, level Level) ([]*GenomicFeature, error) {
+	ret := make([]*GenomicFeature, 0, 10)
 
 	// case insensitive search
 	search = strings.ToLower(search)
+
+	log.Debug().Msgf("search %s", search)
 
 	rows, err := genedb.db.Query(GENE_INFO_SQL,
 		level,
 		search)
 
 	if err != nil {
-		return nil, err //fmt.Errorf("there was an error with the database query")
+		return ret, err //fmt.Errorf("there was an error with the database query")
 	}
 
-	features, err := rowsToRecords(rows, level)
+	err = rowsToRecords(rows, level, &ret)
 
 	if err != nil {
-		return nil, err //fmt.Errorf("there was an error with the database query")
+		return ret, err //fmt.Errorf("there was an error with the database query")
 	}
 
-	return features, nil
+	return ret, nil
 }
 
 func (genedb *GeneDB) WithinGenes(location *dna.Location, level Level) (*GenomicFeatures, error) {
@@ -475,19 +478,20 @@ func (genedb *GeneDB) ClosestGenes(location *dna.Location, n uint16, level Level
 }
 
 func rowsToFeatures(location *dna.Location, rows *sql.Rows, level Level) (*GenomicFeatures, error) {
+	ret := GenomicFeatures{Location: location, Level: level.String(), Features: make([]*GenomicFeature, 0, 10)}
 
 	// 10 seems a reasonable guess for the number of features we might see, just
 	// to reduce slice reallocation
-	features, err := rowsToRecords(rows, level)
+	err := rowsToRecords(rows, level, &ret.Features)
 
 	if err != nil {
-		return nil, err
+		return &ret, err
 	}
 
-	return &GenomicFeatures{Location: location, Level: level.String(), Features: features}, nil
+	return &ret, nil
 }
 
-func rowsToRecords(rows *sql.Rows, level Level) ([]*GenomicFeature, error) {
+func rowsToRecords(rows *sql.Rows, level Level, features *[]*GenomicFeature) error {
 	defer rows.Close()
 
 	var id uint
@@ -502,13 +506,13 @@ func rowsToRecords(rows *sql.Rows, level Level) ([]*GenomicFeature, error) {
 
 	// 10 seems a reasonable guess for the number of features we might see, just
 	// to reduce slice reallocation
-	var features = make([]*GenomicFeature, 0, 10)
+	//var features = make([]*GenomicFeature, 0, 10)
 
 	for rows.Next() {
 		err := rows.Scan(&id, &chr, &start, &end, &strand, &geneSymbol, &geneId, &transcriptId, &d)
 
 		if err != nil {
-			return nil, err //fmt.Errorf("there was an error with the database records")
+			return err //fmt.Errorf("there was an error with the database records")
 		}
 
 		location := dna.NewLocation(chr, start, end)
@@ -522,8 +526,8 @@ func rowsToRecords(rows *sql.Rows, level Level) ([]*GenomicFeature, error) {
 			Level:        level.String(),
 			TssDist:      d}
 
-		features = append(features, &feature)
+		*features = append(*features, &feature)
 	}
 
-	return features, nil
+	return nil
 }

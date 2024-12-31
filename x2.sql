@@ -1,0 +1,1 @@
+INSERT INTO genes (parent_id, level, chr, start, end, tss, strand, gene_id, gene_symbol, transcript_id, exon_id) VALUES (-1, 1, "chr1", 11869, 14409, 11869, "+", "ENSG00000290825", "DDX11L2", "", "");

@@ -39,7 +39,7 @@ files = [
 for f in files:
     print(f)
     with open(
-        f"data/modules/genes/${f[0]}",
+        f"data/modules/genes/{f[0]}",
         "w",
     ) as out:
         for table in tables:

@@ -163,7 +163,7 @@ for f in files:
                     exon_id = ""
 
                 print(
-                    f'INSERT INTO genes (parent_id, level, chr, start, end, tss, strand, gene_id, gene_symbol, transcript_id, exon_id) VALUES ({parent_record_id}, "{level_map[level]}", "{chr}", {start}, {end}, {stranded_start}, "{strand}", "{gene_id}", "{gene_name}", "{transcript_id}", "{exon_id}");',
+                    f'INSERT INTO genes (parent_id, level, chr, start, end, tss, strand, gene_id, gene_symbol, transcript_id, exon_id) VALUES ({parent_record_id}, {level_map[level]}, "{chr}", {start}, {end}, {stranded_start}, "{strand}", "{gene_id}", "{gene_name}", "{transcript_id}", "{exon_id}");',
                     file=out,
                 )
 

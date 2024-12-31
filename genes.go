@@ -52,12 +52,12 @@ const OVERLAPPING_GENES_FROM_LOCATION_SQL = `SELECT id, level, chr, start, end, 
 	WHERE level = 1 AND chr = ?1 AND (start <= ?3 AND end >= ?2)
 	ORDER BY start`
 
-const OVERLAPPING_TRANSCRIPTS_FROM_LOCATION_SQL = `SELECT id, level, chr, start, end, strand, transcript_id 
+const TRANSCRIPTS_IN_GENE_SQL = `SELECT id, level, chr, start, end, strand, transcript_id 
 	FROM genes 
 	WHERE level = 2 AND gene_id = ?1
 	ORDER BY start`
 
-const OVERLAPPING_EXONS_FROM_LOCATION_SQL = `SELECT id, level, chr, start, end, strand, exon_id 
+const EXONS_IN_TRANSCRIPT_SQL = `SELECT id, level, chr, start, end, strand, exon_id 
 	FROM genes 
 	WHERE level = 3 AND transcript_id = ?1
 	ORDER BY start`
@@ -229,6 +229,7 @@ func (genedb *GeneDB) Close() {
 	genedb.db.Close()
 }
 
+// comprehensive gene,transcript exon search for a given location
 func (genedb *GeneDB) OverlappingGenes(location *dna.Location) ([]*GenomicFeature, error) {
 
 	var id uint
@@ -244,7 +245,6 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location) ([]*GenomicFeatur
 
 	// 10 seems a reasonable guess for the number of features we might see, just
 	// to reduce slice reallocation
-
 	var features = make([]*GenomicFeature, 0, 10)
 	var currentGene *GenomicFeature
 	var currentTranscript *GenomicFeature
@@ -282,7 +282,7 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location) ([]*GenomicFeatur
 		features = append(features, feature)
 		currentGene = feature
 
-		transcriptRows, err := genedb.db.Query(OVERLAPPING_TRANSCRIPTS_FROM_LOCATION_SQL,
+		transcriptRows, err := genedb.db.Query(TRANSCRIPTS_IN_GENE_SQL,
 			currentGene.GeneId)
 
 		if err != nil {
@@ -312,7 +312,7 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location) ([]*GenomicFeatur
 			currentGene.Children = append(currentGene.Children, feature)
 			currentTranscript = feature
 
-			exonRows, err := genedb.db.Query(OVERLAPPING_EXONS_FROM_LOCATION_SQL,
+			exonRows, err := genedb.db.Query(EXONS_IN_TRANSCRIPT_SQL,
 				currentTranscript.TranscriptId)
 
 			if err != nil {

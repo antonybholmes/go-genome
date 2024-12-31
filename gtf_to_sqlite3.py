@@ -175,10 +175,10 @@ for f in files:
                     stranded_start = start
                     stranded_end = end
 
-                tags = ",".join(sorted(tags))
+                tag_str = ",".join(sorted(tags))
 
                 print(
-                    f"INSERT INTO genes (parent_id, level, chr, start, end, tss, strand, gene_id, gene_symbol, transcript_id, exon_id) VALUES ({parent_record_id}, {level_map[level]}, '{chr}', {start}, {end}, {stranded_start}, '{strand}', '{gene_id}', '{gene_name}', '{transcript_id}', '{exon_id}', '{tags}');",
+                    f"INSERT INTO genes (parent_id, level, chr, start, end, tss, strand, gene_id, gene_symbol, transcript_id, exon_id, tags) VALUES ({parent_record_id}, {level_map[level]}, '{chr}', {start}, {end}, {stranded_start}, '{strand}', '{gene_id}', '{gene_name}', '{transcript_id}', '{exon_id}', '{tag_str}');",
                     file=out,
                 )
 

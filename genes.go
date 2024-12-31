@@ -57,6 +57,11 @@ const TRANSCRIPTS_IN_GENE_SQL = `SELECT id, level, chr, start, end, strand, tran
 	WHERE level = 2 AND gene_id = ?1
 	ORDER BY start`
 
+const CANONICAL_TRANSCRIPTS_IN_GENE_SQL = `SELECT id, level, chr, start, end, strand, transcript_id 
+	FROM genes 
+	WHERE level = 2 AND gene_id = ?1 AND tags LIKE '%canonical%'
+	ORDER BY start`
+
 const EXONS_IN_TRANSCRIPT_SQL = `SELECT id, level, chr, start, end, strand, exon_id 
 	FROM genes 
 	WHERE level = 3 AND transcript_id = ?1
@@ -230,7 +235,7 @@ func (genedb *GeneDB) Close() {
 }
 
 // comprehensive gene,transcript exon search for a given location
-func (genedb *GeneDB) OverlappingGenes(location *dna.Location) ([]*GenomicFeature, error) {
+func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool) ([]*GenomicFeature, error) {
 
 	var id uint
 	var level Level
@@ -282,7 +287,15 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location) ([]*GenomicFeatur
 		features = append(features, feature)
 		currentGene = feature
 
-		transcriptRows, err := genedb.db.Query(TRANSCRIPTS_IN_GENE_SQL,
+		var trancriptSql string
+
+		if canonical {
+			trancriptSql = CANONICAL_TRANSCRIPTS_IN_GENE_SQL
+		} else {
+			trancriptSql = TRANSCRIPTS_IN_GENE_SQL
+		}
+
+		transcriptRows, err := genedb.db.Query(trancriptSql,
 			currentGene.GeneId)
 
 		if err != nil {

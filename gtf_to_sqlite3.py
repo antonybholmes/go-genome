@@ -86,7 +86,7 @@ for f in files:
         transcript_record_id = -1
         exon_record_id = -1
         tags = set()
-        
+
         with gzip.open(
             f[1],
             "rt",
@@ -111,47 +111,55 @@ for f in files:
                     parent_record_id = -1
                     gene_record_id = record
 
-                    matcher = re.search(r'gene_id "(.+?)";', tokens[8])
-
-                    if matcher:
-                        # remove version
-                        gene_id = re.sub(r"\..+", "", matcher.group(1))
-                    else:
-                        gene_id = ""
-
-                    matcher = re.search(r'gene_name "(.+?)";', tokens[8])
-
-                    if matcher:
-                        gene_name = matcher.group(1)
-                    else:
-                        gene_name = ""
+                    
 
                 if level == "transcript":
                     parent_record_id = gene_record_id
                     transcript_record_id = record
-
-                    matcher = re.search(r'transcript_id "(.+?)";', tokens[8])
-
-                    if matcher:
-                        transcript_id = re.sub(r"\..+", "", matcher.group(1))
-                    else:
-                        transcript_id = ""
-
                     tags = set()
-
-                    if "Ensembl_canonical" in line:
-                        tags.add("canonical")
+                    
 
                 if level == "exon":
                     parent_record_id = transcript_record_id
                     exon_record_id = record
 
-                    matcher = re.search(r'exon_id "(.+?)";', tokens[8])
+                    
 
-                    if matcher:
-                        exon_id = re.sub(r"\..+", "", matcher.group(1))
-                    else:
-                        exon_id = ""
+                # gene
+                matcher = re.search(r'gene_id "(.+?)";', tokens[8])
+
+                if matcher:
+                    # remove version
+                    gene_id = re.sub(r"\..+", "", matcher.group(1))
+                else:
+                    gene_id = ""
+
+                matcher = re.search(r'gene_name "(.+?)";', tokens[8])
+
+                if matcher:
+                    gene_name = matcher.group(1)
+                else:
+                    gene_name = ""
+
+                # transcript
+                matcher = re.search(r'transcript_id "(.+?)";', tokens[8])
+
+                if matcher:
+                    transcript_id = re.sub(r"\..+", "", matcher.group(1))
+                else:
+                    transcript_id = ""
+                
+                if "Ensembl_canonical" in line:
+                    tags.add("canonical")
+
+                # exon
+                matcher = re.search(r'exon_id "(.+?)";', tokens[8])
+
+                if matcher:
+                    exon_id = re.sub(r"\..+", "", matcher.group(1))
+                else:
+                    exon_id = ""
+                
 
                 chr = tokens[0]
                 start = int(tokens[3])

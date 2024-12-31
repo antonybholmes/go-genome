@@ -85,6 +85,8 @@ for f in files:
         gene_record_id = -1
         transcript_record_id = -1
         exon_record_id = -1
+        tags = set()
+        
         with gzip.open(
             f[1],
             "rt",

@@ -51,24 +51,37 @@ for f in files:
             # print(f"CREATE INDEX {table}_chr ON {table} (chr);", file=out)
             # print(f"CREATE INDEX {table}_start ON {table} (start);", file=out)
             # print(f"CREATE INDEX {table}_end ON {table} (end);", file=out)
-            print(f"CREATE INDEX {table}_is_canonical_idx ON {table} (is_canonical);", file=out)
-            print(f"CREATE INDEX {table}_gene_id_idx ON {table} (gene_id);", file=out)
-            print(
-                f"CREATE INDEX {table}_gene_symbol_idx ON {table} (gene_symbol);",
-                file=out,
-            )
+
             print(
                 f"CREATE INDEX {table}_level_chr_start_end_strand_idx ON {table} (level, chr, start, end, strand);",
                 file=out,
             )
+
             print(
-                f"CREATE INDEX {table}_transcript_id_idx ON {table} (transcript_id);",
+                f"CREATE INDEX {table}_transcripts_idx ON {table} (level, gene_id, is_canonical);",
                 file=out,
             )
             print(
-                f"CREATE INDEX {table}_exon_id_idx ON {table} (exon_id);",
+                f"CREATE INDEX {table}_exons_idx ON {table} (level, transcript_id, is_canonical);",
                 file=out,
             )
+
+            print(f"CREATE INDEX {table}_gene_id_idx ON {table} (gene_id);", file=out)
+
+            print(
+                f"CREATE INDEX {table}_gene_symbol_idx ON {table} (gene_symbol);",
+                file=out,
+            )
+
+            # print(
+            #     f"CREATE INDEX {table}_transcript_id_idx ON {table} (transcript_id);",
+            #     file=out,
+            # )
+
+            # print(
+            #     f"CREATE INDEX {table}_exon_id_idx ON {table} (exon_id);",
+            #     file=out,
+            # )
 
             # print(
             #    f"CREATE INDEX {table}_level_chr_stranded_start_stranded_end ON {table} (level, chr, stranded_start, stranded_end);",
@@ -117,7 +130,7 @@ for f in files:
                     transcript_record_id = record
                     tags = set()
                     is_canonical = 0
-                    
+
                 if level == "exon":
                     parent_record_id = transcript_record_id
                     exon_record_id = record
@@ -145,7 +158,7 @@ for f in files:
                     transcript_id = re.sub(r"\..+", "", matcher.group(1))
                 else:
                     transcript_id = ""
-                
+
                 if "Ensembl_canonical" in line:
                     tags.add("canonical")
                     is_canonical = 1
@@ -157,7 +170,6 @@ for f in files:
                     exon_id = re.sub(r"\..+", "", matcher.group(1))
                 else:
                     exon_id = ""
-                
 
                 chr = tokens[0]
                 start = int(tokens[3])

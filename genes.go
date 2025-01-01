@@ -35,8 +35,8 @@ const WITHIN_GENE_AND_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_s
  	WHERE level = ?2 AND 
 	chr = ?3 AND 
 	(
-		(strand = '+' AND (start - ?6 <= ?5 AND end >= ?4)) OR
-		(strand = '-' AND (start >= ?5 AND end + ?6 <= ?4))
+		((start - ?6 <= ?5 AND end >= ?4) AND strand = '+') OR
+		((start >= ?5 AND end + ?6 <= ?4) AND strand = '-')
 	)
  	ORDER BY start`
 
@@ -59,7 +59,7 @@ const TRANSCRIPTS_IN_GENE_SQL = `SELECT id, level, chr, start, end, strand, tran
 
 const CANONICAL_TRANSCRIPTS_IN_GENE_SQL = `SELECT id, level, chr, start, end, strand, transcript_id 
 	FROM genes 
-	WHERE level = 2 AND gene_id = ?1 AND tags LIKE '%canonical%'
+	WHERE level = 2 AND is_canonical = 1 AND gene_id = ?1 
 	ORDER BY start`
 
 const EXONS_IN_TRANSCRIPT_SQL = `SELECT id, level, chr, start, end, strand, exon_id 

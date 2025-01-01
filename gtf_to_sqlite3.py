@@ -44,14 +44,14 @@ for f in files:
     ) as out:
         for table in tables:
             print(
-                f"CREATE TABLE {table} (id INTEGER PRIMARY KEY ASC, parent_id INTEGER NOT NULL, level INTEGER NOT NULL, chr TEXT NOT NULL, start INTEGER NOT NULL, end INTEGER NOT NULL, tss INTEGER NOT NULL, strand TEXT NOT NULL, gene_id TEXT NOT NULL DEFAULT '', gene_symbol TEXT NOT NULL DEFAULT '', transcript_id TEXT NOT NULL DEFAULT '', exon_id TEXT NOT NULL DEFAULT '', tags NOT NULL DEFAULT '');",
+                f"CREATE TABLE {table} (id INTEGER PRIMARY KEY ASC, parent_id INTEGER NOT NULL, level INTEGER NOT NULL, chr TEXT NOT NULL, start INTEGER NOT NULL, end INTEGER NOT NULL, tss INTEGER NOT NULL, strand TEXT NOT NULL, gene_id TEXT NOT NULL DEFAULT '', gene_symbol TEXT NOT NULL DEFAULT '', transcript_id TEXT NOT NULL DEFAULT '', exon_id TEXT NOT NULL DEFAULT '', is_canonical BOOLEAN NOT NULL DEFAULT 0);",
                 file=out,
             )
             # print(f"CREATE INDEX {table}_level ON {table} (level);", file=out)
             # print(f"CREATE INDEX {table}_chr ON {table} (chr);", file=out)
             # print(f"CREATE INDEX {table}_start ON {table} (start);", file=out)
             # print(f"CREATE INDEX {table}_end ON {table} (end);", file=out)
-            print(f"CREATE INDEX {table}_tags_idx ON {table} (tags);", file=out)
+            print(f"CREATE INDEX {table}_is_canonical_idx ON {table} (is_canonical);", file=out)
             print(f"CREATE INDEX {table}_gene_id_idx ON {table} (gene_id);", file=out)
             print(
                 f"CREATE INDEX {table}_gene_symbol_idx ON {table} (gene_symbol);",
@@ -86,6 +86,7 @@ for f in files:
         transcript_record_id = -1
         exon_record_id = -1
         tags = set()
+        is_canonical = 0
 
         with gzip.open(
             f[1],
@@ -111,19 +112,15 @@ for f in files:
                     parent_record_id = -1
                     gene_record_id = record
 
-                    
-
                 if level == "transcript":
                     parent_record_id = gene_record_id
                     transcript_record_id = record
                     tags = set()
+                    is_canonical = 0
                     
-
                 if level == "exon":
                     parent_record_id = transcript_record_id
                     exon_record_id = record
-
-                    
 
                 # gene
                 matcher = re.search(r'gene_id "(.+?)";', tokens[8])
@@ -151,6 +148,7 @@ for f in files:
                 
                 if "Ensembl_canonical" in line:
                     tags.add("canonical")
+                    is_canonical = 1
 
                 # exon
                 matcher = re.search(r'exon_id "(.+?)";', tokens[8])
@@ -178,7 +176,7 @@ for f in files:
                 tag_str = ",".join(sorted(tags))
 
                 print(
-                    f"INSERT INTO genes (parent_id, level, chr, start, end, tss, strand, gene_id, gene_symbol, transcript_id, exon_id, tags) VALUES ({parent_record_id}, {level_map[level]}, '{chr}', {start}, {end}, {stranded_start}, '{strand}', '{gene_id}', '{gene_name}', '{transcript_id}', '{exon_id}', '{tag_str}');",
+                    f"INSERT INTO genes (parent_id, level, chr, start, end, tss, strand, gene_id, gene_symbol, transcript_id, exon_id, is_canonical) VALUES ({parent_record_id}, {level_map[level]}, '{chr}', {start}, {end}, {stranded_start}, '{strand}', '{gene_id}', '{gene_name}', '{transcript_id}', '{exon_id}', {is_canonical});",
                     file=out,
                 )
 

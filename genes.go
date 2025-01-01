@@ -59,7 +59,7 @@ const TRANSCRIPTS_IN_GENE_SQL = `SELECT id, level, chr, start, end, strand, tran
 
 const CANONICAL_TRANSCRIPTS_IN_GENE_SQL = `SELECT id, level, chr, start, end, strand, transcript_id 
 	FROM genes 
-	WHERE level = 2 AND is_canonical = 1 AND gene_id = ?1 
+	WHERE level = 2 AND gene_id = ?1 AND is_canonical = 1
 	ORDER BY start`
 
 const EXONS_IN_TRANSCRIPT_SQL = `SELECT id, level, chr, start, end, strand, exon_id 

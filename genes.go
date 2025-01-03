@@ -14,6 +14,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const GENE_DB_INFO_SQL = `SELECT id, genome, version FROM info`
+
 const GENE_INFO_SQL = `SELECT id, chr, start, end, strand, gene_symbol, gene_id, transcript_id, 0 as tss_dist
 	FROM genes
  	WHERE level = ?1 AND (LOWER(gene_symbol) = ?2 OR LOWER(gene_id) = ?2 OR LOWER(transcript_id) = ?2)
@@ -211,6 +213,11 @@ func (cache *GeneDBCache) Close() {
 	}
 }
 
+type GeneDBInfo struct {
+	Genome  string `json:"genome"`
+	Version string `json:"version"`
+}
+
 type GeneDB struct {
 	db *sql.DB
 	//withinGeneStmt *sql.Stmt
@@ -232,6 +239,20 @@ func NewGeneDB(file string) *GeneDB {
 
 func (genedb *GeneDB) Close() {
 	genedb.db.Close()
+}
+
+func (genedb *GeneDB) GeneDBInfo() (*GeneDBInfo, error) {
+	var id uint
+	var genome string
+	var version string
+
+	err := genedb.db.QueryRow(GENE_DB_INFO_SQL).Scan(&id, &genome, &version)
+
+	if err != nil {
+		return nil, err //fmt.Errorf("there was an error with the database query")
+	}
+
+	return &GeneDBInfo{Genome: genome, Version: version}, nil
 }
 
 // comprehensive gene,transcript exon search for a given location

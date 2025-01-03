@@ -23,18 +23,22 @@ level_map = {"gene": 1, "transcript": 2, "exon": 3}
 files = [
     [
         "hg19.sql",
+        ["hg19", "Gencode v38"],
         "/ifs/scratch/cancer/Lab_RDF/ngs/references/gencode/grch37/gencode.v38lift37.annotation.gtf.gz",
     ],
     [
         "grch38.sql",
+        ["grch38", "Gencode v44"],
         "/ifs/scratch/cancer/Lab_RDF/ngs/references/gencode/grch38/gencode.v44.annotation.gtf.gz",
     ],
     [
         "mm10.sql",
+        ["mm10", "Gencode vM25"],
         "/ifs/scratch/cancer/Lab_RDF/ngs/references/gencode/mm10/gencode.vM25.annotation.gtf.gz",
     ],
 ]
 
+table = "genes"
 
 for f in files:
     print(f)
@@ -42,53 +46,62 @@ for f in files:
         f"data/modules/genes/{f[0]}",
         "w",
     ) as out:
-        for table in tables:
-            print(
-                f"CREATE TABLE {table} (id INTEGER PRIMARY KEY ASC, parent_id INTEGER NOT NULL, level INTEGER NOT NULL, chr TEXT NOT NULL, start INTEGER NOT NULL, end INTEGER NOT NULL, tss INTEGER NOT NULL, strand TEXT NOT NULL, gene_id TEXT NOT NULL DEFAULT '', gene_symbol TEXT NOT NULL DEFAULT '', transcript_id TEXT NOT NULL DEFAULT '', exon_id TEXT NOT NULL DEFAULT '', is_canonical BOOLEAN NOT NULL DEFAULT 0);",
-                file=out,
-            )
-            # print(f"CREATE INDEX {table}_level ON {table} (level);", file=out)
-            # print(f"CREATE INDEX {table}_chr ON {table} (chr);", file=out)
-            # print(f"CREATE INDEX {table}_start ON {table} (start);", file=out)
-            # print(f"CREATE INDEX {table}_end ON {table} (end);", file=out)
+        print(
+            f"CREATE TABLE info (id INTEGER PRIMARY KEY ASC, genome TEXT NOT NULL, version TEXT NOT NULL);",
+            file=out,
+        )
 
-            print(
-                f"CREATE INDEX {table}_level_chr_start_end_strand_idx ON {table} (level, chr, start, end, strand);",
-                file=out,
-            )
+        print(
+            f"CREATE TABLE {table} (id INTEGER PRIMARY KEY ASC, parent_id INTEGER NOT NULL, level INTEGER NOT NULL, chr TEXT NOT NULL, start INTEGER NOT NULL, end INTEGER NOT NULL, tss INTEGER NOT NULL, strand TEXT NOT NULL, gene_id TEXT NOT NULL DEFAULT '', gene_symbol TEXT NOT NULL DEFAULT '', transcript_id TEXT NOT NULL DEFAULT '', exon_id TEXT NOT NULL DEFAULT '', is_canonical BOOLEAN NOT NULL DEFAULT 0);",
+            file=out,
+        )
+        # print(f"CREATE INDEX {table}_level ON {table} (level);", file=out)
+        # print(f"CREATE INDEX {table}_chr ON {table} (chr);", file=out)
+        # print(f"CREATE INDEX {table}_start ON {table} (start);", file=out)
+        # print(f"CREATE INDEX {table}_end ON {table} (end);", file=out)
 
-            print(
-                f"CREATE INDEX {table}_transcripts_idx ON {table} (level, gene_id, is_canonical);",
-                file=out,
-            )
-            print(
-                f"CREATE INDEX {table}_exons_idx ON {table} (level, transcript_id, is_canonical);",
-                file=out,
-            )
+        print(
+            f"CREATE INDEX {table}_level_chr_start_end_strand_idx ON {table} (level, chr, start, end, strand);",
+            file=out,
+        )
 
-            print(f"CREATE INDEX {table}_gene_id_idx ON {table} (gene_id);", file=out)
+        print(
+            f"CREATE INDEX {table}_transcripts_idx ON {table} (level, gene_id, is_canonical);",
+            file=out,
+        )
+        print(
+            f"CREATE INDEX {table}_exons_idx ON {table} (level, transcript_id, is_canonical);",
+            file=out,
+        )
 
-            print(
-                f"CREATE INDEX {table}_gene_symbol_idx ON {table} (gene_symbol);",
-                file=out,
-            )
+        print(f"CREATE INDEX {table}_gene_id_idx ON {table} (gene_id);", file=out)
 
-            # print(
-            #     f"CREATE INDEX {table}_transcript_id_idx ON {table} (transcript_id);",
-            #     file=out,
-            # )
+        print(
+            f"CREATE INDEX {table}_gene_symbol_idx ON {table} (gene_symbol);",
+            file=out,
+        )
 
-            # print(
-            #     f"CREATE INDEX {table}_exon_id_idx ON {table} (exon_id);",
-            #     file=out,
-            # )
+        # print(
+        #     f"CREATE INDEX {table}_transcript_id_idx ON {table} (transcript_id);",
+        #     file=out,
+        # )
 
-            # print(
-            #    f"CREATE INDEX {table}_level_chr_stranded_start_stranded_end ON {table} (level, chr, stranded_start, stranded_end);",
-            #    file=out,
-            # )
+        # print(
+        #     f"CREATE INDEX {table}_exon_id_idx ON {table} (exon_id);",
+        #     file=out,
+        # )
 
-            print()
+        # print(
+        #    f"CREATE INDEX {table}_level_chr_stranded_start_stranded_end ON {table} (level, chr, stranded_start, stranded_end);",
+        #    file=out,
+        # )
+
+        print(
+            f"INSERT INTO info (genome, version) VALUES('{f[1][0]}', '{f[1][1]}');",
+            file=out,
+        )
+
+        print()
 
         levels = {"gene", "transcript", "exon"}
 
@@ -102,7 +115,7 @@ for f in files:
         is_canonical = 0
 
         with gzip.open(
-            f[1],
+            f[2],
             "rt",
         ) as f:
             for line in f:

@@ -166,7 +166,7 @@ func NewGeneDBCache(dir string) *GeneDBCache {
 		if strings.HasSuffix(basename, ".db") {
 
 			name := strings.TrimSuffix(basename, filepath.Ext(basename))
-			db := NewGeneDB(filepath.Join(dir, basename))
+			db := NewGeneDB(name, filepath.Join(dir, basename))
 			cacheMap[name] = db
 
 			log.Debug().Msgf("found gene database %s", name)
@@ -182,24 +182,37 @@ func (cache *GeneDBCache) Dir() string {
 	return cache.dir
 }
 
-func (cache *GeneDBCache) List() []string {
+func (cache *GeneDBCache) List() ([]*GeneDBInfo, error) {
 
 	ids := make([]string, 0, len(cache.cacheMap))
 
 	for id := range cache.cacheMap {
+
 		ids = append(ids, id)
 	}
 
 	sort.Strings(ids)
 
-	return ids
+	infos := make([]*GeneDBInfo, 0, len(ids))
+
+	for _, id := range ids {
+		info, err := cache.cacheMap[id].GeneDBInfo()
+
+		if err != nil {
+			return nil, err
+		}
+
+		infos = append(infos, info)
+	}
+
+	return infos, nil
 }
 
 func (cache *GeneDBCache) GeneDB(assembly string) (*GeneDB, error) {
 	_, ok := cache.cacheMap[assembly]
 
 	if !ok {
-		db := NewGeneDB(filepath.Join(cache.dir, fmt.Sprintf("%s.db", assembly)))
+		db := NewGeneDB(assembly, filepath.Join(cache.dir, fmt.Sprintf("%s.db", assembly)))
 
 		cache.cacheMap[assembly] = db
 	}
@@ -214,22 +227,24 @@ func (cache *GeneDBCache) Close() {
 }
 
 type GeneDBInfo struct {
+	Name    string `json:"name"`
 	Genome  string `json:"genome"`
 	Version string `json:"version"`
 }
 
 type GeneDB struct {
-	db *sql.DB
+	name string
+	db   *sql.DB
 	//withinGeneStmt *sql.Stmt
 	withinGeneAndPromStmt *sql.Stmt
 	//inExonStmt      *sql.Stmt
 	//closestGeneStmt *sql.Stmt
 }
 
-func NewGeneDB(file string) *GeneDB {
+func NewGeneDB(name string, file string) *GeneDB {
 	db := sys.Must(sql.Open("sqlite3", file))
 
-	return &GeneDB{db: db, //withinGeneStmt: sys.Must(db.Prepare(WITHIN_GENE_SQL)),
+	return &GeneDB{name: name, db: db, //withinGeneStmt: sys.Must(db.Prepare(WITHIN_GENE_SQL)),
 		withinGeneAndPromStmt: sys.Must(db.Prepare(WITHIN_GENE_AND_PROMOTER_SQL))}
 
 	//inExonStmt:      sys.Must(db.Prepare(IN_EXON_SQL)),
@@ -252,7 +267,7 @@ func (genedb *GeneDB) GeneDBInfo() (*GeneDBInfo, error) {
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
-	return &GeneDBInfo{Genome: genome, Version: version}, nil
+	return &GeneDBInfo{Name: genedb.name, Genome: genome, Version: version}, nil
 }
 
 // comprehensive gene,transcript exon search for a given location

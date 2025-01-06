@@ -82,11 +82,10 @@ type GenomicFeature struct {
 	GeneId       string            `json:"geneId,omitempty"`
 	TranscriptId string            `json:"transcriptId,omitempty"`
 	ExonId       string            `json:"exonId,omitempty"`
-	IsCanonical  bool              `json:"isCanonical"`
 	PromLabel    string            `json:"promLabel,omitempty"`
 	Children     []*GenomicFeature `json:"children,omitempty"`
-	//Id           uint              `json:"-"`
-	TssDist int `json:"tssDist,omitempty"`
+	TssDist      int               `json:"tssDist,omitempty"`
+	IsCanonical  bool              `json:"isCanonical"`
 }
 
 // func (feature *GenomicFeature) ToLocation() *dna.Location {
@@ -234,12 +233,9 @@ type GeneDBInfo struct {
 }
 
 type GeneDB struct {
-	name string
-	db   *sql.DB
-	//withinGeneStmt *sql.Stmt
+	db                    *sql.DB
 	withinGeneAndPromStmt *sql.Stmt
-	//inExonStmt      *sql.Stmt
-	//closestGeneStmt *sql.Stmt
+	name                  string
 }
 
 func NewGeneDB(name string, file string) *GeneDB {

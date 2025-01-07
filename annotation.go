@@ -76,7 +76,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 	genesWithin, err := annotateDb.GeneDb.WithinGenesAndPromoter(
 		location,
 		LEVEL_TRANSCRIPT,
-		basemath.UintMax(annotateDb.TSSRegion.Offset5P(), annotateDb.TSSRegion.Offset3P()),
+		basemath.Max(annotateDb.TSSRegion.Offset5P(), annotateDb.TSSRegion.Offset3P()),
 	)
 
 	if err != nil {
@@ -187,7 +187,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 	nids := len(ids)
 	// arrays are always at least 1 element since if nothing is found
 	// we put NA
-	n := basemath.IntMax(1, nids)
+	n := basemath.Max(1, nids)
 	geneSymbols := make([]string, n)
 	geneStrands := make([]string, n)
 	tssDists := make([]string, n)

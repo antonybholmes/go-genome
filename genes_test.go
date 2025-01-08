@@ -12,7 +12,7 @@ func TestWithin(t *testing.T) {
 	fmt.Println("Within")
 
 	file := fmt.Sprintf("../data/gene/%s.db", "grch38")
-	db := NewGeneDB(file)
+	db := NewGeneDB("grch38", file)
 
 	defer db.Close()
 
@@ -34,7 +34,7 @@ func TestClosest(t *testing.T) {
 
 	file := fmt.Sprintf("../data/gene/%s.db", "grch38")
 
-	db := NewGeneDB(file)
+	db := NewGeneDB("grch38", file)
 
 	defer db.Close()
 

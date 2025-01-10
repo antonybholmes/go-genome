@@ -10,15 +10,15 @@ replace github.com/antonybholmes/go-sys => ../go-sys
 
 require github.com/antonybholmes/go-basemath v0.0.0-20250107213632-9971295f8456
 
-require github.com/antonybholmes/go-dna v0.0.0-20250107213628-1199d0a50a63
+require github.com/antonybholmes/go-dna v0.0.0-20250108011036-cba189338a1b
 
 require (
-	github.com/antonybholmes/go-sys v0.0.0-20250106231244-0d0c227dc641
+	github.com/antonybholmes/go-sys v0.0.0-20250108011046-3565a1fbce78
 	github.com/rs/zerolog v1.33.0
 )
 
 require (
-	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect

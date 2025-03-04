@@ -1,4 +1,4 @@
-package genes
+package genome
 
 import (
 	"database/sql"

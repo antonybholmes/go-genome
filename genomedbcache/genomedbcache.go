@@ -1,9 +1,9 @@
-package genedbcache
+package genomedbcache
 
 import (
 	"sync"
 
-	gene "github.com/antonybholmes/go-genes"
+	gene "github.com/antonybholmes/go-genome"
 )
 
 var instance *gene.GeneDBCache

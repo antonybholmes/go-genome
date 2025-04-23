@@ -10,12 +10,12 @@ replace github.com/antonybholmes/go-dna => ../go-dna
 
 replace github.com/antonybholmes/go-sys => ../go-sys
 
-require github.com/antonybholmes/go-basemath v0.0.0-20250307171544-f522e91d1448
+require github.com/antonybholmes/go-basemath v0.0.0-20250416150928-5a7b42705292
 
-require github.com/antonybholmes/go-dna v0.0.0-20250405224421-32db60060b39
+require github.com/antonybholmes/go-dna v0.0.0-20250416150924-f0155aed2a7f
 
 require (
-	github.com/antonybholmes/go-sys v0.0.0-20250407123533-c0a150855656
+	github.com/antonybholmes/go-sys v0.0.0-20250416150929-65c6bca5e1ff
 	github.com/rs/zerolog v1.34.0
 )
 

@@ -75,6 +75,8 @@ const EXONS_IN_TRANSCRIPT_SQL = `SELECT id, level, chr, start, end, strand, exon
 	WHERE level = 3 AND transcript_id = ?1
 	ORDER BY start`
 
+const MAX_GENE_INFO_RESULTS uint16 = 100
+
 // const IN_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_symbol, gene_id, transcript_id, start - ?
 // 	FROM genes
 //  	WHERE level = 2 AND gene_id = ? AND chr = ? AND ? >= stranded_start - ? AND ? <= stranded_start + ?
@@ -405,10 +407,16 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool) (
 }
 
 func (genedb *GeneDB) GeneInfo(search string, level Level, n uint16, fuzzy bool) ([]*GenomicFeature, error) {
+	n = max(1, min(n, MAX_GENE_INFO_RESULTS))
+
 	ret := make([]*GenomicFeature, 0, n)
 
 	// case insensitive search
 	search = strings.ToLower(search)
+
+	if len(search) < 2 || strings.Contains(search, "chr:") {
+		return ret, fmt.Errorf("%s is an invalid search term", search)
+	}
 
 	//log.Debug().Msgf("search %s", search)
 
@@ -437,6 +445,8 @@ func (genedb *GeneDB) GeneInfo(search string, level Level, n uint16, fuzzy bool)
 	if err != nil {
 		return ret, err //fmt.Errorf("there was an error with the database query")
 	}
+
+	//sort.Sort(SortFeatureByPos(ret))
 
 	return ret, nil
 }
@@ -597,5 +607,24 @@ func rowsToRecords(rows *sql.Rows, level Level, features *[]*GenomicFeature) err
 		*features = append(*features, &feature)
 	}
 
+	// enforce sorted correctly by chr and then position
+	sort.Sort(SortFeatureByPos(*features))
+
 	return nil
+}
+
+type SortFeatureByPos []*GenomicFeature
+
+func (features SortFeatureByPos) Len() int      { return len(features) }
+func (features SortFeatureByPos) Swap(i, j int) { features[i], features[j] = features[j], features[i] }
+func (features SortFeatureByPos) Less(i, j int) bool {
+	ci := dna.ChromToInt(features[i].Location.Chr)
+	cj := dna.ChromToInt(features[j].Location.Chr)
+
+	// on different chrs so sort by chr
+	if ci != cj {
+		return ci < cj
+	}
+
+	return features[i].Location.Start < features[j].Location.Start
 }

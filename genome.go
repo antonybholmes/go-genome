@@ -25,7 +25,7 @@ const GENE_INFO_FUZZY_SQL = `SELECT id, chr, start, end, strand, gene_symbol, ge
  	FROM genes
   	WHERE level = ?1 AND (gene_symbol LIKE ?2 OR gene_id LIKE ?2 OR transcript_id LIKE ?2)
  	ORDER BY chr, start 
-	LIMIT 100`
+	LIMIT ?3`
 
 const WITHIN_GENE_SQL = `SELECT id, chr, start, end, strand, gene_symbol, gene_id, transcript_id, ?1 - tss as tss_dist
 	FROM genes
@@ -404,13 +404,13 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool) (
 	return features, nil
 }
 
-func (genedb *GeneDB) GeneInfo(search string, level Level, fuzzy bool) ([]*GenomicFeature, error) {
-	ret := make([]*GenomicFeature, 0, 10)
+func (genedb *GeneDB) GeneInfo(search string, level Level, n uint16, fuzzy bool) ([]*GenomicFeature, error) {
+	ret := make([]*GenomicFeature, 0, n)
 
 	// case insensitive search
 	search = strings.ToLower(search)
 
-	log.Debug().Msgf("search %s", search)
+	//log.Debug().Msgf("search %s", search)
 
 	var rows *sql.Rows
 	var err error
@@ -419,7 +419,8 @@ func (genedb *GeneDB) GeneInfo(search string, level Level, fuzzy bool) ([]*Genom
 		// rows, err = genedb.db.Query(GENE_INFO_SQL)
 		rows, err = genedb.db.Query(GENE_INFO_FUZZY_SQL,
 			level,
-			"%"+search+"%")
+			search+"%",
+			n)
 	} else {
 		rows, err = genedb.db.Query(GENE_INFO_SQL,
 			level,
@@ -427,6 +428,7 @@ func (genedb *GeneDB) GeneInfo(search string, level Level, fuzzy bool) ([]*Genom
 	}
 
 	if err != nil {
+		// return empty array
 		return ret, err //fmt.Errorf("there was an error with the database query")
 	}
 

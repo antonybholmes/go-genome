@@ -15,7 +15,7 @@ require github.com/antonybholmes/go-basemath v0.0.0-20250507224209-326910455aee
 require github.com/antonybholmes/go-dna v0.0.0-20250509222604-3dd9e6aa9ab6
 
 require (
-	github.com/antonybholmes/go-sys v0.0.0-20250512211932-464c953347d7
+	github.com/antonybholmes/go-sys v0.0.0-20250530200903-de9311aa2093
 	github.com/rs/zerolog v1.34.0
 )
 
@@ -31,7 +31,7 @@ require (
 	github.com/xuri/excelize/v2 v2.9.1 // indirect
 	github.com/xuri/nfp v0.0.1 // indirect
 	golang.org/x/crypto v0.38.0 // indirect
-	golang.org/x/exp v0.0.0-20250506013437-ce4c2cf36ca6 // indirect
+	golang.org/x/exp v0.0.0-20250531010427-b6e5de432a8b // indirect
 	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.25.0 // indirect

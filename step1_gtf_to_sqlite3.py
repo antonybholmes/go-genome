@@ -51,8 +51,21 @@ for f in files:
             file=out,
         )
 
+        # creat the gene id table
+        # print(
+        #     f"CREATE TABLE ids (id INTEGER PRIMARY KEY ASC, name TEXT NOT NULL);",
+        #     file=out,
+        # )
+
+        # create the transcript type table
+        # print(
+        #     f"CREATE TABLE transcript_types (id INTEGER PRIMARY KEY ASC, name TEXT NOT NULL);",
+        #     file=out,
+        # )
+
+        # create the genes table
         print(
-            f"CREATE TABLE {table} (id INTEGER PRIMARY KEY ASC, parent_id INTEGER NOT NULL, level INTEGER NOT NULL, chr TEXT NOT NULL, start INTEGER NOT NULL, end INTEGER NOT NULL, tss INTEGER NOT NULL, strand TEXT NOT NULL, gene_id TEXT NOT NULL DEFAULT '', gene_symbol TEXT NOT NULL DEFAULT '', transcript_id TEXT NOT NULL DEFAULT '', exon_id TEXT NOT NULL DEFAULT '', is_canonical BOOLEAN NOT NULL DEFAULT 0);",
+            f"CREATE TABLE {table} (id INTEGER PRIMARY KEY ASC, parent_id INTEGER NOT NULL, level INTEGER NOT NULL, chr TEXT NOT NULL, start INTEGER NOT NULL, end INTEGER NOT NULL, tss INTEGER NOT NULL, strand TEXT NOT NULL, gene_id TEXT NOT NULL DEFAULT '', gene_symbol TEXT NOT NULL DEFAULT '', transcript_id TEXT NOT NULL DEFAULT '', exon_id TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '');",
             file=out,
         )
         # print(f"CREATE INDEX {table}_level ON {table} (level);", file=out)
@@ -105,14 +118,84 @@ for f in files:
 
         levels = {"gene", "transcript", "exon"}
 
-        print("BEGIN TRANSACTION;", file=out)
-
         record = 1
         gene_record_id = -1
         transcript_record_id = -1
         exon_record_id = -1
         tags = set()
         is_canonical = 0
+        id_map = {}
+        transcript_types = {}
+
+        # read the GTF file for building id maps
+
+        # with gzip.open(
+        #     f[2],
+        #     "rt",
+        # ) as f:
+        #     for line in f:
+        #         if line.startswith("#"):
+        #             continue
+
+        #         tokens = line.strip().split("\t")
+
+        #         # gene
+        #         matcher = re.search(r'gene_id "(.+?)";', tokens[8])
+
+        #         if matcher:
+        #             # remove version
+        #             gene_id = re.sub(r"\..+", "", matcher.group(1))
+
+        #             if gene_id not in id_map:
+        #                 id_map[gene_id] = len(id_map) + 1
+
+        #         matcher = re.search(r'gene_name "(.+?)";', tokens[8])
+
+        #         if matcher:
+        #             gene_name = matcher.group(1)
+
+        #             if gene_name not in id_map:
+        #                 id_map[gene_name] = len(id_map) + 1
+
+        #         # transcript_type
+        #         matcher = re.search(r'transcript_type "(.+?)";', tokens[8])
+
+        #         if matcher:
+        #             transcript_type = re.sub(r"\..+", "", matcher.group(1))
+
+        #             if transcript_type not in transcript_types:
+        #                 transcript_types[transcript_type] = len(transcript_types) + 1
+
+        # # sort the id_map by id
+        # ids = list(sorted(id_map.items(), key=lambda item: item[1]))
+
+        # print("BEGIN TRANSACTION;", file=out)
+
+        # for id, name in ids:
+        #     print(
+        #         f"INSERT INTO ids (name) VALUES ('{name}');",
+        #         file=out,
+        #     )
+
+        # print("COMMIT;", file=out)
+        # print()
+
+        # # sort the transcript_types by id
+        # transcript_types = list(
+        #     sorted(transcript_types.items(), key=lambda item: item[1])
+        # )
+        # print("BEGIN TRANSACTION;", file=out)
+        # for transcript_type, id in transcript_types:
+        #     print(
+        #         f"INSERT INTO transcript_types (name) VALUES ('{transcript_type}');",
+        #         file=out,
+        #     )
+        # print("COMMIT;", file=out)
+        # print()
+
+        # parse file again to generate SQL insert statements
+
+        print("BEGIN TRANSACTION;", file=out)
 
         with gzip.open(
             f[2],
@@ -134,6 +217,20 @@ for f in files:
                 if level not in levels:
                     continue
 
+                is_canonical = 0
+                tags = set()
+                parent_record_id = -1
+                gene_id = ""
+                gene_name = ""
+                transcript_type = ""
+                transcript_id = ""
+                exon_id = ""
+                chr = ""
+                start = 0
+                end = 0
+                stranded_start = 0
+                stranded_end = 0
+
                 if level == "gene":
                     parent_record_id = -1
                     gene_record_id = record
@@ -141,8 +238,6 @@ for f in files:
                 if level == "transcript":
                     parent_record_id = gene_record_id
                     transcript_record_id = record
-                    tags = set()
-                    is_canonical = 0
 
                 if level == "exon":
                     parent_record_id = transcript_record_id
@@ -154,23 +249,24 @@ for f in files:
                 if matcher:
                     # remove version
                     gene_id = re.sub(r"\..+", "", matcher.group(1))
-                else:
-                    gene_id = ""
 
                 matcher = re.search(r'gene_name "(.+?)";', tokens[8])
 
                 if matcher:
                     gene_name = matcher.group(1)
-                else:
-                    gene_name = ""
+
+                # transcript_type
+                matcher = re.search(r'transcript_type "(.+?)";', tokens[8])
+
+                if matcher:
+                    transcript_type = re.sub(r"\..+", "", matcher.group(1))
+                    tags.add(transcript_type)
 
                 # transcript
                 matcher = re.search(r'transcript_id "(.+?)";', tokens[8])
 
                 if matcher:
                     transcript_id = re.sub(r"\..+", "", matcher.group(1))
-                else:
-                    transcript_id = ""
 
                 if "Ensembl_canonical" in line:
                     tags.add("canonical")
@@ -181,8 +277,6 @@ for f in files:
 
                 if matcher:
                     exon_id = re.sub(r"\..+", "", matcher.group(1))
-                else:
-                    exon_id = ""
 
                 chr = tokens[0]
                 start = int(tokens[3])
@@ -201,7 +295,7 @@ for f in files:
                 tag_str = ",".join(sorted(tags))
 
                 print(
-                    f"INSERT INTO genes (parent_id, level, chr, start, end, tss, strand, gene_id, gene_symbol, transcript_id, exon_id, is_canonical) VALUES ({parent_record_id}, {level_map[level]}, '{chr}', {start}, {end}, {stranded_start}, '{strand}', '{gene_id}', '{gene_name}', '{transcript_id}', '{exon_id}', {is_canonical});",
+                    f"INSERT INTO genes (parent_id, level, chr, start, end, tss, strand, gene_id, gene_symbol, transcript_id, exon_id, tags) VALUES ({parent_record_id}, {level_map[level]}, '{chr}', {start}, {end}, {stranded_start}, '{strand}', '{gene_id}', '{gene_name}', '{transcript_id}', '{exon_id}', '{",".join(sorted(tags))}');",
                     file=out,
                 )
 

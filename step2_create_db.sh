@@ -1,4 +1,4 @@
-for f in data/modules/genes/*.sql
+for f in data/modules/genome/*.sql
 do
     out=`echo ${f} | sed -r 's/.sql/.db/'`
     echo ${f} ${out}

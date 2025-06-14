@@ -92,7 +92,7 @@ for file_desc in files:
         # print(f"CREATE INDEX genes_end ON genes (end);", file=out)
 
         print(
-            f"CREATE INDEX genes_level_chr_start_end_strand_idx ON genes (level, chr, start, end, strand);",
+            f"CREATE INDEX genes_level_chr_start_end_strand_idx ON genes (chr, start, end, strand);",
             file=out,
         )
 

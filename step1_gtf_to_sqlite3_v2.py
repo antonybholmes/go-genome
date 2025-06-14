@@ -79,14 +79,16 @@ for file_desc in files:
     cursor.execute(TRANSCRIPTS_SQL)
     cursor.execute(EXONS_SQL)
     cursor.execute("CREATE INDEX idx_genes_gene_id ON genes(gene_id);")
-    cursor.execute(
-        "CREATE INDEX idx_transcripts_transcript_id ON transcripts(transcript_id);"
-    )
-    cursor.execute("CREATE INDEX idx_exons_exon_id ON exons(exon_id);")
+    cursor.execute("CREATE INDEX idx_genes_gene_symbol ON genes(gene_symbol);")
     cursor.execute(
         "CREATE INDEX idx_genes_chr_start_end_strand ON genes(chr, start, end, strand);"
     )
-
+    cursor.execute(
+        "CREATE INDEX idx_transcripts_transcript_id ON transcripts(transcript_id);"
+    )
+    cursor.execute("CREATE INDEX idx_transcripts_start_end ON transcripts(start, end);")
+    cursor.execute("CREATE INDEX idx_exons_exon_id ON exons(exon_id);")
+    cursor.execute("CREATE INDEX idx_exons_start_end ON exons(start, end);")
     cursor.execute(
         f"CREATE TABLE info (id INTEGER PRIMARY KEY ASC, genome TEXT NOT NULL, version TEXT NOT NULL);",
     )

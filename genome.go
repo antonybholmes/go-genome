@@ -16,11 +16,14 @@ import (
 
 const GENE_DB_INFO_SQL = `SELECT id, genome, version FROM info`
 
-const GENE_INFO_SQL = `SELECT g.id, g.chr, g.start, g.end, g.strand, g.gene_id, g.gene_symbol, transcript_id, gene_type, 0 as tss_dist
-	FROM genes
- 	WHERE (gene_symbol LIKE ?2 OR g.gene_id LIKE ?2 OR g.transcript_id LIKE ?2)
-	ORDER BY g.chr, g.start
-	LIMIT ?3`
+const GENE_INFO_SQL = `SELECT g.id, g.chr, g.start, g.end, g.strand, g.gene_id, g.gene_symbol, g.gene_type, 0 as tss_dist
+	FROM genes AS g
+ 	WHERE (g.gene_symbol LIKE ?1 OR g.gene_id LIKE ?1)`
+
+const TRANSCRIPT_INFO_SQL = `SELECT t.id, g.chr, t.start, t.end, t.strand, g.gene_id, g.gene_symbol, g.gene_type, t.transcript_id, 0 as tss_dist
+	FROM transcripts AS t
+	INNER JOIN genes AS g ON g.id = t.gene_id
+ 	WHERE (g.gene_symbol LIKE ?1 OR g.gene_id LIKE ?1 OR t.transcript_id LIKE ?1)`
 
 // const GENE_INFO_FUZZY_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, transcript_id, gene_type, 0 as tss_dist
 //  	FROM genes
@@ -423,7 +426,12 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool) (
 	return features, nil
 }
 
-func (genedb *GeneDB) SearchForGeneByName(search string, level Level, n uint16, fuzzy bool) ([]*GenomicFeature, error) {
+func (genedb *GeneDB) SearchForGeneByName(search string,
+	level Level,
+	n uint16,
+	fuzzy bool,
+	canonical bool,
+	geneType string) ([]*GenomicFeature, error) {
 	n = max(1, min(n, MAX_GENE_INFO_RESULTS))
 
 	ret := make([]*GenomicFeature, 0, n)
@@ -444,13 +452,42 @@ func (genedb *GeneDB) SearchForGeneByName(search string, level Level, n uint16, 
 		search += "%"
 	}
 
-	rows, err = genedb.db.Query(GENE_INFO_SQL,
-		level,
-		search,
-		n)
+	var sql string
+
+	if level == LEVEL_GENE {
+		sql = GENE_INFO_SQL
+	} else {
+		sql = TRANSCRIPT_INFO_SQL
+	}
+
+	if canonical {
+		sql += " AND g.is_canonical = 1"
+	}
+
+	var orderSql string
+
+	if level == LEVEL_GENE {
+		orderSql = " ORDER BY g.chr, g.start"
+	} else {
+		orderSql = " ORDER BY t.chr, t.start"
+	}
+
+	if geneType != "" {
+		sql += " AND g.gene_type = ?2 LIMIT ?3" + orderSql
+
+		rows, err = genedb.db.Query(sql,
+			search,
+			geneType,
+			n)
+	} else {
+		sql += " LIMIT ?2" + orderSql
+
+		rows, err = genedb.db.Query(sql,
+			search,
+			n)
+	}
 
 	if err != nil {
-		// return empty array
 		return ret, err //fmt.Errorf("there was an error with the database query")
 	}
 
@@ -632,7 +669,7 @@ func rowsToRecords(rows *sql.Rows, level Level, features *[]*GenomicFeature) err
 		case LEVEL_TRANSCRIPT, LEVEL_EXON:
 			err = rows.Scan(&id, &chr, &start, &end, &strand, &geneId, &geneSymbol, &transcriptId, &geneType, &d)
 		default:
-			err = rows.Scan(&id, &chr, &start, &end, &strand, &geneId, &geneSymbol, &geneType)
+			err = rows.Scan(&id, &chr, &start, &end, &strand, &geneId, &geneSymbol, &geneType, &d)
 		}
 
 		if err != nil {

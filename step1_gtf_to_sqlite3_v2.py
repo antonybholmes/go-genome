@@ -22,15 +22,15 @@ level_map = {"gene": 1, "transcript": 2, "exon": 3}
 
 files = [
     [
-        ["hg19", "Gencode v38"],
+        ["hg19", "Gencode GRCh37 v48"],
         "/home/antony/development/gencode.v48lift37.basic.annotation.gtf.gz",
     ],
     [
-        ["grch38", "Gencode v44"],
+        ["grch38", "Gencode GRCh38 v48"],
         "/home/antony/development/gencode.v48.basic.annotation.gtf.gz",
     ],
     [
-        ["mm10", "Gencode vM25"],
+        ["mm10", "Gencode mm10 vM25"],
         "/home/antony/development/gencode.vM25.basic.annotation.gtf.gz",
     ],
 ]
@@ -44,7 +44,6 @@ GENES_SQL = """CREATE TABLE genes
     end INT NOT NULL DEFAULT 1,
     tss INT NOT NULL DEFAULT 1,
     strand CHAR(1) NOT NULL DEFAULT '+',
-    is_canonical INT NOT NULL DEFAULT 0,
     gene_type TEXT NOT NULL DEFAULT '');"""
 
 TRANSCRIPTS_SQL = """CREATE TABLE transcripts 
@@ -52,7 +51,8 @@ TRANSCRIPTS_SQL = """CREATE TABLE transcripts
     gene_id INT NOT NULL REFERENCES genes(id),
     transcript_id TEXT NOT NULL DEFAULT '',
     start INT NOT NULL DEFAULT 1,
-    end INT NOT NULL DEFAULT 1);"""
+    end INT NOT NULL DEFAULT 1,
+    is_canonical INT NOT NULL DEFAULT 0);"""
 
 EXONS_SQL = """CREATE TABLE exons 
     (id INTEGER PRIMARY KEY ASC,
@@ -122,7 +122,6 @@ for file_desc in files:
 
             # print(line)
 
-            is_canonical = 0
             tags = set()
             parent_record_id = -1
             gene_id = "n/a"
@@ -144,6 +143,12 @@ for file_desc in files:
                 parent_record_id = gene_record_id
                 transcript_record_id += 1
                 exon_number = 1
+
+                if "Ensembl_canonical" in line:
+                    tags.add("canonical:true")
+                    is_canonical = 1
+                else:
+                    is_canonical = 0
 
             if level == "exon":
                 parent_record_id = transcript_record_id
@@ -173,10 +178,6 @@ for file_desc in files:
 
             if matcher:
                 transcript_id = re.sub(r"\..+", "", matcher.group(1))
-
-            if "Ensembl_canonical" in line:
-                tags.add("canonical:true")
-                is_canonical = 1
 
             # exon
             matcher = re.search(r'exon_id "(.+?)";', tokens[8])
@@ -208,7 +209,7 @@ for file_desc in files:
 
             if level == "gene":
                 cursor.execute(
-                    "INSERT INTO genes (gene_id, gene_symbol, chr, start, end, tss, strand, is_canonical, gene_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO genes (gene_id, gene_symbol, chr, start, end, tss, strand, gene_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         gene_id,
                         gene_name,
@@ -217,20 +218,14 @@ for file_desc in files:
                         end,
                         stranded_start,
                         strand,
-                        is_canonical,
                         gene_type,
                     ),
                 )
                 # record = cursor.lastrowid
             elif level == "transcript":
                 cursor.execute(
-                    "INSERT INTO transcripts (transcript_id, gene_id, start, end) VALUES (?, ?, ?, ?)",
-                    (
-                        transcript_id,
-                        gene_record_id,
-                        start,
-                        end,
-                    ),
+                    "INSERT INTO transcripts (transcript_id, gene_id, start, end, is_canonical) VALUES (?, ?, ?, ?, ?)",
+                    (transcript_id, gene_record_id, start, end, is_canonical),
                 )
                 # record = cursor.lastrowid
             elif level == "exon":

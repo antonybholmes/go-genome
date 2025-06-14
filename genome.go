@@ -66,27 +66,26 @@ const IN_EXON_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, t
 
 // If start is less x2 and end is greater than x1, it constrains the feature to be overlapping
 // our location
-const OVERLAPPING_GENES_FROM_LOCATION_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_symbol, is_canonical, gene_type
+const OVERLAPPING_GENES_FROM_LOCATION_SQL = `SELECT g.id, g.chr, g.start, g.end, g.strand, g.gene_id, g.gene_symbol, g.gene_type
 	FROM genes AS g
-	WHERE g.chr = ?1 AND (g.start <= ?3 AND g.end >= ?2)`
+	WHERE g.chr = ?1 AND (g.start <= ?3 AND g.end >= ?2)
+	ORDER BY g.start`
 
-const TRANSCRIPTS_IN_GENE_SQL = `SELECT t.id, g.chr, t.start, t.end, g.strand, t.transcript_id, g.is_canonical, g.gene_type
+const TRANSCRIPTS_IN_GENE_SQL = `SELECT t.id, g.chr, t.start, t.end, g.strand, t.transcript_id, t.is_canonical, g.gene_type
 	FROM transcripts AS t
 	INNER JOIN genes AS g ON g.id = t.gene_id
-	WHERE t.gene_id = ?1
-	ORDER BY t.start`
+	WHERE t.gene_id = ?1`
 
 // const CANONICAL_TRANSCRIPTS_IN_GENE_SQL = `SELECT id, level, chr, start, end, strand, transcript_id, is_canonical, gene_type
 // 	FROM genes
 // 	WHERE level = 2 AND gene_id = ?1 AND is_canonical = 1
 // 	ORDER BY start`
 
-const EXONS_IN_TRANSCRIPT_SQL = `SELECT e.id, g.chr, e.start, e.end, g.strand, e.exon_id, g.is_canonical
+const EXONS_IN_TRANSCRIPT_SQL = `SELECT e.id, g.chr, e.start, e.end, g.strand, e.exon_id, t.is_canonical, g.gene_type
 	FROM exons AS e
 	INNER JOIN transcripts AS t ON t.id = e.transcript_id
 	INNER JOIN genes AS g ON g.id = t.gene_id
-	WHERE t.transcript_id = ?1
-	ORDER BY e.start`
+	WHERE e.transcript_id = ?1`
 
 const ID_TO_NAME_SQL = `SELECT name FROM ids WHERE id = ?1`
 
@@ -98,6 +97,7 @@ const MAX_GENE_INFO_RESULTS uint16 = 100
 //  	ORDER BY start ASC`
 
 type GenomicFeature struct {
+	Id           uint              `json:"-"`
 	Location     *dna.Location     `json:"loc"`
 	Strand       string            `json:"strand"`
 	Level        Level             `json:"level"`
@@ -313,20 +313,19 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool) (
 	var currentGene *GenomicFeature
 	var currentTranscript *GenomicFeature
 
-	genesSql := OVERLAPPING_GENES_FROM_LOCATION_SQL
+	var sql string
 
-	if canonical {
-		genesSql += " AND g.is_canonical = 1"
-	}
-
-	genesSql += " ORDER BY g.start"
-
-	geneRows, err := genedb.db.Query(genesSql,
+	geneRows, err := genedb.db.Query(OVERLAPPING_GENES_FROM_LOCATION_SQL,
 		location.Chr,
 		location.Start,
 		location.End)
 
+	log.Debug().Msgf("querying overlapping genes %s %s %d %d", OVERLAPPING_GENES_FROM_LOCATION_SQL, location.Chr,
+		location.Start,
+		location.End)
+
 	if err != nil {
+		log.Debug().Msgf("error querying overlapping genes %s", err)
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
@@ -336,7 +335,7 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool) (
 
 	for geneRows.Next() {
 		//err := geneRows.Scan(&id, &level, &chr, &start, &end, &strand, &geneId, &geneSymbol, &transcriptId, &exonId)
-		err := geneRows.Scan(&id, &chr, &start, &end, &strand, &geneId, &geneSymbol, &isCanonical, &geneType)
+		err := geneRows.Scan(&id, &chr, &start, &end, &strand, &geneId, &geneSymbol, &geneType)
 
 		if err != nil {
 			return nil, err //fmt.Errorf("there was an error with the database records")
@@ -344,20 +343,29 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool) (
 
 		location := &dna.Location{Chr: chr, Start: start, End: end}
 
-		feature := &GenomicFeature{Location: location,
-			Level:       LEVEL_GENE,
-			GeneSymbol:  geneSymbol,
-			GeneId:      geneId,
-			Strand:      strand,
-			IsCanonical: isCanonical,
-			GeneType:    geneType,
-			Children:    make([]*GenomicFeature, 0, 10)}
+		feature := &GenomicFeature{Id: id,
+			Location:   location,
+			Level:      LEVEL_GENE,
+			GeneSymbol: geneSymbol,
+			GeneId:     geneId,
+			Strand:     strand,
+			GeneType:   geneType,
+			Children:   make([]*GenomicFeature, 0, 10)}
 
-		features = append(features, feature)
 		currentGene = feature
 
-		transcriptRows, err := genedb.db.Query(TRANSCRIPTS_IN_GENE_SQL,
-			currentGene.GeneId)
+		sql = TRANSCRIPTS_IN_GENE_SQL
+
+		if canonical {
+			sql += " AND t.is_canonical = 1"
+		}
+
+		sql += " ORDER BY t.start"
+
+		log.Debug().Msgf("querying transcripts in gene %s %d", sql, currentGene.Id)
+
+		transcriptRows, err := genedb.db.Query(sql,
+			currentGene.Id)
 
 		if err != nil {
 			return nil, err //fmt.Errorf("there was an error with the database query")
@@ -371,12 +379,14 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool) (
 			err := transcriptRows.Scan(&id, &chr, &start, &end, &strand, &transcriptId, &isCanonical, &geneType)
 
 			if err != nil {
+				log.Debug().Msgf("error scanning transcript rows %s", err)
 				return nil, err //fmt.Errorf("there was an error with the database records")
 			}
 
 			location := &dna.Location{Chr: chr, Start: start, End: end}
 
-			feature := &GenomicFeature{Location: location,
+			feature := &GenomicFeature{Id: id,
+				Location:     location,
 				Level:        "transcript",
 				GeneSymbol:   geneSymbol,
 				GeneId:       geneId,
@@ -385,11 +395,21 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool) (
 				IsCanonical:  isCanonical,
 				GeneType:     geneType,
 				Children:     make([]*GenomicFeature, 0, 10)}
-			currentGene.Children = append(currentGene.Children, feature)
+
 			currentTranscript = feature
 
-			exonRows, err := genedb.db.Query(EXONS_IN_TRANSCRIPT_SQL,
-				currentTranscript.TranscriptId)
+			sql = EXONS_IN_TRANSCRIPT_SQL
+
+			if canonical {
+				sql += " AND t.is_canonical = 1"
+			}
+
+			sql += " ORDER BY e.start"
+
+			log.Debug().Msgf("querying exons in transcript %s %d", sql, currentTranscript.Id)
+
+			exonRows, err := genedb.db.Query(sql,
+				currentTranscript.Id)
 
 			if err != nil {
 				return nil, err //fmt.Errorf("there was an error with the database query")
@@ -407,7 +427,8 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool) (
 				}
 
 				location := &dna.Location{Chr: chr, Start: start, End: end}
-				feature := &GenomicFeature{Location: location,
+				feature := &GenomicFeature{Id: id,
+					Location:     location,
 					Level:        "exon",
 					GeneSymbol:   geneSymbol,
 					GeneId:       geneId,
@@ -417,10 +438,16 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool) (
 					IsCanonical:  isCanonical,
 					GeneType:     geneType}
 				currentTranscript.Children = append(currentTranscript.Children, feature)
+			}
 
+			if len(currentTranscript.Children) > 0 {
+				currentGene.Children = append(currentGene.Children, currentTranscript)
 			}
 		}
 
+		if len(currentGene.Children) > 0 {
+			features = append(features, currentGene)
+		}
 	}
 
 	return features, nil
@@ -460,8 +487,8 @@ func (genedb *GeneDB) SearchForGeneByName(search string,
 		sql = TRANSCRIPT_INFO_SQL
 	}
 
-	if canonical {
-		sql += " AND g.is_canonical = 1"
+	if level != LEVEL_GENE && canonical {
+		sql += " AND t.is_canonical = 1"
 	}
 
 	var orderSql string
@@ -473,14 +500,16 @@ func (genedb *GeneDB) SearchForGeneByName(search string,
 	}
 
 	if geneType != "" {
-		sql += " AND g.gene_type = ?2 LIMIT ?3" + orderSql
+		sql += " AND g.gene_type = ?2" + orderSql + " LIMIT ?3"
 
 		rows, err = genedb.db.Query(sql,
 			search,
 			geneType,
 			n)
 	} else {
-		sql += " LIMIT ?2" + orderSql
+		sql += orderSql + " LIMIT ?2"
+
+		log.Debug().Msgf("search %s %s", sql, search)
 
 		rows, err = genedb.db.Query(sql,
 			search,
@@ -488,12 +517,14 @@ func (genedb *GeneDB) SearchForGeneByName(search string,
 	}
 
 	if err != nil {
+		log.Debug().Msgf("search %s  ", err)
 		return ret, err //fmt.Errorf("there was an error with the database query")
 	}
 
 	err = rowsToRecords(rows, level, &ret)
 
 	if err != nil {
+		log.Debug().Msgf("error reading rows %s", err)
 		return ret, err //fmt.Errorf("there was an error with the database query")
 	}
 

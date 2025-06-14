@@ -42,6 +42,7 @@ GENES_SQL = """CREATE TABLE genes
     chr TEXT NOT NULL DEFAULT 'chr1',
     start INT NOT NULL DEFAULT 1,
     end INT NOT NULL DEFAULT 1,
+    tss INT NOT NULL DEFAULT 1,
     strand CHAR(1) NOT NULL DEFAULT '+',
     is_canonical INT NOT NULL DEFAULT 0,
     gene_type TEXT NOT NULL DEFAULT '');"""
@@ -188,12 +189,12 @@ for file_desc in files:
             strand = tokens[6]
 
             # invert coordinates to make searching easier
-            # if strand == "-":
-            #     stranded_start = end
-            #     stranded_end = start
-            # else:
-            #     stranded_start = start
-            #     stranded_end = end
+            if strand == "-":
+                stranded_start = end
+                # stranded_end = start
+            else:
+                stranded_start = start
+                # stranded_end = end
 
             tag_str = ",".join(sorted(tags))
 
@@ -205,13 +206,14 @@ for file_desc in files:
 
             if level == "gene":
                 cursor.execute(
-                    "INSERT INTO genes (gene_id, gene_symbol, chr, start, end, strand, is_canonical, gene_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO genes (gene_id, gene_symbol, chr, start, end, tss, strand, is_canonical, gene_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         gene_id,
                         gene_name,
                         chr,
                         start,
                         end,
+                        stranded_start,
                         strand,
                         is_canonical,
                         gene_type,

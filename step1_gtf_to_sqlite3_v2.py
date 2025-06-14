@@ -14,7 +14,6 @@ import os
 import pandas as pd
 import numpy as np
 import gzip
-import gffutils
 import sqlite3
 
 tables = ["genes"]
@@ -24,15 +23,15 @@ level_map = {"gene": 1, "transcript": 2, "exon": 3}
 files = [
     [
         ["hg19", "Gencode v38"],
-        "/ifs/scratch/cancer/Lab_RDF/ngs/references/gencode/grch37/gencode.v38lift37.annotation.gtf.gz",
+        "/home/antony/development/gencode.v48lift37.basic.annotation.gtf.gz",
     ],
     [
         ["grch38", "Gencode v44"],
-        "/ifs/scratch/cancer/Lab_RDF/ngs/references/gencode/grch38/gencode.v44.annotation.gtf.gz",
+        "/home/antony/development/gencode.v48.basic.annotation.gtf.gz",
     ],
     [
         ["mm10", "Gencode vM25"],
-        "/ifs/scratch/cancer/Lab_RDF/ngs/references/gencode/mm10/gencode.vM25.annotation.gtf.gz",
+        "/home/antony/development/gencode.vM25.basic.annotation.gtf.gz",
     ],
 ]
 
@@ -94,6 +93,8 @@ for file_desc in files:
     cursor.execute(
         f"INSERT INTO info (genome, version) VALUES('{file_desc[0][0]}', '{file_desc[0][1]}');",
     )
+
+    cursor.execute("END TRANSACTION;")
 
     cursor.execute("BEGIN TRANSACTION;")
 

@@ -94,8 +94,6 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 
 		idMap[id] = gene.GeneSymbol
 
-		log.Debug().Msgf("%s %s %v", gene.GeneId, gene.GeneSymbol, gene)
-
 		//let labels = annotate.classify_location(location, gene);
 
 		exons, err := annotateDb.GeneDb.InExon(location, id)
@@ -232,6 +230,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 	closestGenes, err := annotateDb.GeneDb.ClosestGenes(location, annotateDb.N, LEVEL_GENE)
 
 	if err != nil {
+		log.Debug().Msgf("Error xx closest genes for location %s: %v", location, err)
 		return nil, err
 	}
 

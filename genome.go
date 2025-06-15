@@ -335,10 +335,6 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool, g
 			location.End)
 	}
 
-	log.Debug().Msgf("querying overlapping genes %s %s %d %d", sql, location.Chr,
-		location.Start,
-		location.End)
-
 	if err != nil {
 		log.Debug().Msgf("error querying overlapping genes %s", err)
 		return nil, err //fmt.Errorf("there was an error with the database query")
@@ -376,8 +372,6 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool, g
 		}
 
 		sql += " ORDER BY t.start, t.end DESC"
-
-		log.Debug().Msgf("querying transcripts in gene %s %d", sql, currentGene.Id)
 
 		transcriptRows, err := genedb.db.Query(sql,
 			currentGene.Id)
@@ -420,8 +414,6 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool, g
 			}
 
 			sql += " ORDER BY e.start, e.end DESC"
-
-			log.Debug().Msgf("querying exons in transcript %s %d", sql, currentTranscript.Id)
 
 			exonRows, err := genedb.db.Query(sql,
 				currentTranscript.Id)
@@ -523,8 +515,6 @@ func (genedb *GeneDB) SearchForGeneByName(search string,
 			n)
 	} else {
 		sql += orderSql + " LIMIT ?2"
-
-		log.Debug().Msgf("search %s %s", sql, search)
 
 		rows, err = genedb.db.Query(sql,
 			search,

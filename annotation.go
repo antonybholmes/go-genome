@@ -73,9 +73,9 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 	//     location.End + annotate.tssRegion.offset_5p.abs(),
 	// )?;
 
-	genesWithin, err := annotateDb.GeneDb.WithinGenesAndPromoter(
+	transcriptsWithin, err := annotateDb.GeneDb.WithinGenesAndPromoter(
 		location,
-		LEVEL_TRANSCRIPT,
+
 		basemath.Max(annotateDb.TSSRegion.Offset5P(), annotateDb.TSSRegion.Offset3P()),
 	)
 
@@ -89,7 +89,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 
 	//let mut distMap: HashMap<&str, bool> = HashMap::new();
 
-	for _, gene := range genesWithin.Features {
+	for _, gene := range transcriptsWithin.Features {
 		id := gene.GeneId
 
 		idMap[id] = gene.GeneSymbol

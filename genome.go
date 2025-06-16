@@ -127,23 +127,24 @@ const WITHIN_GENE_AND_PROMOTER_SQL = `SELECT
 	INNER JOIN transcript AS t ON g.id = t.gene_id
 	INNER JOIN gene_type AS gt ON g.gene_type_id = gt.id
 	INNER JOIN transcript_type AS tt ON t.transcript_type_id = tt.id
- 	WHERE g.chr = ?3 AND 
+ 	WHERE g.chr = ?2 AND 
 	(
-		((t.start - ?6 <= ?5 AND t.end >= ?4) AND g.strand = '+') OR
-		((t.start >= ?5 AND t.end + ?6 <= ?4) AND g.strand = '-')
+		((t.start - ?5 <= ?4 AND t.end >= ?3) AND g.strand = '+') OR
+		((t.start >= ?4 AND t.end + ?5 <= ?3) AND g.strand = '-')
 	)
  	ORDER BY t.start, t.end DESC`
 
-const IN_EXON_SQL = `SELECT 
-	e.id, 
-	g.chr, 
-	e.start, 
-	e.end, 
-	g.strand, 
-	g.gene_id, 
-	g.gene_symbol, 
-	gt.name as gene_type, 
-	t.transcript_id, 
+// when annotating genes, see if position falls within an exon
+const IN_EXON_SQL = `SELECT
+	e.id,
+	g.chr,
+	e.start,
+	e.end,
+	g.strand,
+	g.gene_id,
+	g.gene_symbol,
+	gt.name as gene_type,
+	t.transcript_id,
 	t.is_canonical,
 	tt.name as transcript_type,
 	?1 - g.tss as tss_dist
@@ -152,7 +153,7 @@ const IN_EXON_SQL = `SELECT
 	INNER JOIN gene AS g ON g.id = t.gene_id
 	INNER JOIN gene_type AS gt ON g.gene_type_id = gt.id
 	INNER JOIN transcript_type AS tt ON t.transcript_type_id = tt.id
- 	WHERE g.gene_id = ?2 AND g.chr = ?3 AND (e.start <= ?5 AND e.end >= ?4)
+ 	WHERE g.gene_id = ?2 AND (e.start <= ?4 AND e.end >= ?3)
  	ORDER BY e.start, e.end DESC`
 
 // If start is less x2 and end is greater than x1, it constrains the feature to be overlapping
@@ -206,9 +207,7 @@ const OVERLAP_ORDER_BY_SQL = ` ORDER BY
 	t.end DESC,
 	t.transcript_id, 
 	e.start, 
-	e.end DESC,
-	e.exon_id,
-	e.exon_number`
+	e.end DESC`
 
 const TRANSCRIPTS_IN_GENE_SQL = `SELECT 
 	t.id, 
@@ -863,7 +862,7 @@ func (genedb *GeneDB) WithinGenes(location *dna.Location, level Level) (*Genomic
 	return rowsToFeatures(location, rows, level)
 }
 
-func (genedb *GeneDB) WithinGenesAndPromoter(location *dna.Location, level Level, pad uint) (*GenomicFeatures, error) {
+func (genedb *GeneDB) WithinGenesAndPromoter(location *dna.Location, pad uint) (*GenomicFeatures, error) {
 	mid := (location.Start + location.End) / 2
 
 	// rows, err := genedb.withinGeneAndPromStmt.Query(
@@ -881,7 +880,6 @@ func (genedb *GeneDB) WithinGenesAndPromoter(location *dna.Location, level Level
 
 	rows, err := genedb.db.Query(WITHIN_GENE_AND_PROMOTER_SQL,
 		mid,
-		level,
 		location.Chr,
 		location.Start,
 		location.End,
@@ -910,7 +908,6 @@ func (genedb *GeneDB) InExon(location *dna.Location, geneId string) (*GenomicFea
 	rows, err := genedb.db.Query(IN_EXON_SQL,
 		mid,
 		geneId,
-		location.Chr,
 		location.Start,
 		location.End)
 
@@ -1036,6 +1033,7 @@ func rowsToRecords(rows *sql.Rows, level Level, features *[]*GenomicFeature) err
 			GeneSymbol:     geneSymbol,
 			GeneType:       geneType,
 			TranscriptId:   transcriptId,
+			IsCanonical:    isCanonical,
 			TranscriptType: transcriptType,
 			TssDist:        d}
 

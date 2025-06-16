@@ -260,17 +260,17 @@ const MAX_GENE_INFO_RESULTS uint16 = 100
 
 type GenomicFeature struct {
 	Location       *dna.Location     `json:"loc"`
-	GeneType       string            `json:"geneType,omitempty"`
-	Strand         string            `json:"strand"`
+	TranscriptId   string            `json:"transcriptId,omitempty"`
+	ExonId         string            `json:"exonId,omitempty"`
 	Level          Level             `json:"level"`
 	GeneSymbol     string            `json:"geneSymbol,omitempty"`
 	GeneId         string            `json:"geneId,omitempty"`
-	TranscriptId   string            `json:"transcriptId,omitempty"`
+	GeneType       string            `json:"geneType,omitempty"`
 	TranscriptType string            `json:"transcriptType,omitempty"`
-	ExonId         string            `json:"exonId,omitempty"`
-	ExonNumber     uint              `json:"exonNumber,omitempty"`
+	Strand         string            `json:"strand"`
 	PromLabel      string            `json:"promLabel,omitempty"`
 	Children       []*GenomicFeature `json:"children,omitempty"`
+	ExonNumber     uint              `json:"exonNumber,omitempty"`
 	Id             uint              `json:"-"`
 	TssDist        int               `json:"tssDist,omitempty"`
 	IsCanonical    bool              `json:"isCanonical"`

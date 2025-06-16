@@ -171,6 +171,8 @@ const IN_EXON_SQL = `SELECT
 // 	INNER JOIN gene_type AS gt ON g.gene_type_id = gt.id
 // 	WHERE g.chr = ?1 AND (g.start <= ?3 AND g.end >= ?2)`
 
+// get all genes, transcripts, and exons overlapping a location
+// which we can use to build a nested gene structure
 const OVERLAP_LOCATION_SQL = `SELECT 
 	g.id AS gid, 
 	g.chr, 

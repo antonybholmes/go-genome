@@ -188,7 +188,8 @@ const OVERLAP_LOCATION_SQL = `SELECT
 	e.id AS eid, 
 	e.start AS estart, 
 	e.end AS eend,  
-	e.exon_id
+	e.exon_id,
+	e.exon_number
 	FROM exon AS e
 	INNER JOIN transcript AS t ON t.id = e.transcript_id
 	INNER JOIN gene AS g ON g.id = t.gene_id
@@ -205,7 +206,9 @@ const OVERLAP_ORDER_BY_SQL = ` ORDER BY
 	t.end DESC,
 	t.transcript_id, 
 	e.start, 
-	e.end DESC`
+	e.end DESC,
+	e.exon_id,
+	e.exon_number`
 
 const TRANSCRIPTS_IN_GENE_SQL = `SELECT 
 	t.id, 
@@ -264,6 +267,7 @@ type GenomicFeature struct {
 	TranscriptId   string            `json:"transcriptId,omitempty"`
 	TranscriptType string            `json:"transcriptType,omitempty"`
 	ExonId         string            `json:"exonId,omitempty"`
+	ExonNumber     uint              `json:"exonNumber,omitempty"`
 	PromLabel      string            `json:"promLabel,omitempty"`
 	Children       []*GenomicFeature `json:"children,omitempty"`
 	Id             uint              `json:"-"`
@@ -634,9 +638,10 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool, g
 	var isCanonical bool
 	var transcriptType string
 	var eid uint
-	var exonId string
 	var estart uint
 	var eend uint
+	var exonId string
+	var exonNumber uint
 
 	// 10 seems a reasonable guess for the number of features we might see, just
 	// to reduce slice reallocation
@@ -695,6 +700,7 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool, g
 			&estart,
 			&eend,
 			&exonId,
+			&exonNumber,
 		)
 
 		if err != nil {
@@ -743,6 +749,7 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool, g
 			GeneId:       geneId,
 			TranscriptId: transcriptId,
 			ExonId:       exonId,
+			ExonNumber:   exonNumber,
 			Strand:       strand,
 			IsCanonical:  isCanonical,
 			GeneType:     geneType}

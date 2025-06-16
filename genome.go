@@ -654,6 +654,10 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool, g
 
 	sql := OVERLAP_LOCATION_SQL
 
+	if canonical {
+		sql += " AND t.is_canonical = 1"
+	}
+
 	if geneTypeFilter != "" {
 		sql += " AND gene_type = ?4" + OVERLAP_ORDER_BY_SQL
 
@@ -664,6 +668,7 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location, canonical bool, g
 			geneTypeFilter)
 	} else {
 		sql += OVERLAP_ORDER_BY_SQL
+
 		geneRows, err = genedb.db.Query(sql,
 			location.Chr,
 			location.Start,

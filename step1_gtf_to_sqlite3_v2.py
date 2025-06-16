@@ -35,7 +35,11 @@ files = [
     ],
 ]
 
-GENES_SQL = """CREATE TABLE genes 
+GENE_TYPES_SQL = """CREATE TABLE gene_type 
+    (id INTEGER PRIMARY KEY ASC,
+    name TEXT NOT NULL UNIQUE DEFAULT '');"""
+
+GENES_SQL = """CREATE TABLE gene 
     (id INTEGER PRIMARY KEY ASC,
     gene_id TEXT NOT NULL DEFAULT '',
     gene_symbol TEXT NOT NULL DEFAULT '',
@@ -44,19 +48,25 @@ GENES_SQL = """CREATE TABLE genes
     end INT NOT NULL DEFAULT 1,
     tss INT NOT NULL DEFAULT 1,
     strand CHAR(1) NOT NULL DEFAULT '+',
-    gene_type TEXT NOT NULL DEFAULT '');"""
+    gene_type_id INT NOT NULL REFERENCES gene_type(id));"""
 
-TRANSCRIPTS_SQL = """CREATE TABLE transcripts 
+TRANSCRIPT_TYPES_SQL = """CREATE TABLE transcript_type 
     (id INTEGER PRIMARY KEY ASC,
-    gene_id INT NOT NULL REFERENCES genes(id),
+    name TEXT NOT NULL UNIQUE DEFAULT '');"""
+
+TRANSCRIPTS_SQL = """CREATE TABLE transcript 
+    (id INTEGER PRIMARY KEY ASC,
+    gene_id INT NOT NULL REFERENCES gene(id),
     transcript_id TEXT NOT NULL DEFAULT '',
     start INT NOT NULL DEFAULT 1,
     end INT NOT NULL DEFAULT 1,
-    is_canonical INT NOT NULL DEFAULT 0);"""
+    is_canonical INT NOT NULL DEFAULT 0,
+    transcript_type_id INT NOT NULL REFERENCES transcript_type(id));"""
 
-EXONS_SQL = """CREATE TABLE exons 
+
+EXONS_SQL = """CREATE TABLE exon 
     (id INTEGER PRIMARY KEY ASC,
-    transcript_id INT NOT NULL REFERENCES transcripts(id),
+    transcript_id INT NOT NULL REFERENCES transcript(id),
     exon_id TEXT NOT NULL DEFAULT '',
     exon_number INT NOT NULL DEFAULT 1,
     start INT NOT NULL DEFAULT 1,
@@ -75,25 +85,31 @@ for file_desc in files:
 
     cursor.execute("PRAGMA journal_mode = WAL;")
     cursor.execute("PRAGMA foreign_keys = ON;")
+    cursor.execute(GENE_TYPES_SQL)
+    cursor.execute(TRANSCRIPT_TYPES_SQL)
     cursor.execute(GENES_SQL)
     cursor.execute(TRANSCRIPTS_SQL)
     cursor.execute(EXONS_SQL)
 
-    cursor.execute("CREATE INDEX idx_genes_gene_id ON genes(gene_id);")
-    cursor.execute("CREATE INDEX idx_genes_gene_symbol ON genes(gene_symbol);")
+    cursor.execute("CREATE INDEX idx_gene_gene_id ON gene(gene_id);")
+    cursor.execute("CREATE INDEX idx_gene_gene_symbol ON gene(gene_symbol);")
+    cursor.execute("CREATE INDEX idx_gene_gene_type_id ON gene(gene_type_id);")
     cursor.execute(
-        "CREATE INDEX idx_genes_chr_start_end_strand ON genes(chr, start, end, strand);"
+        "CREATE INDEX idx_gene_chr_start_end_strand ON gene(chr, start, end, strand);"
     )
 
     cursor.execute(
-        "CREATE INDEX idx_transcripts_transcript_id ON transcripts(transcript_id);"
+        "CREATE INDEX idx_transcript_transcript_id ON transcript(transcript_id);"
     )
-    cursor.execute("CREATE INDEX idx_transcripts_gene_id ON transcripts(gene_id);")
-    cursor.execute("CREATE INDEX idx_transcripts_start_end ON transcripts(start, end);")
+    cursor.execute("CREATE INDEX idx_transcript_gene_id ON transcript(gene_id);")
+    cursor.execute("CREATE INDEX idx_transcript_start_end ON transcript(start, end);")
+    cursor.execute(
+        "CREATE INDEX idx_transcript_transcript_type_id ON transcript(transcript_type_id);"
+    )
 
-    cursor.execute("CREATE INDEX idx_exons_exon_id ON exons(exon_id);")
-    cursor.execute("CREATE INDEX idx_exons_transcript_id ON exons(transcript_id);")
-    cursor.execute("CREATE INDEX idx_exons_start_end ON exons(start, end);")
+    cursor.execute("CREATE INDEX idx_exon_exon_id ON exon(exon_id);")
+    cursor.execute("CREATE INDEX idx_exon_transcript_id ON exon(transcript_id);")
+    cursor.execute("CREATE INDEX idx_exon_start_end ON exon(start, end);")
 
     cursor.execute(
         f"CREATE TABLE info (id INTEGER PRIMARY KEY ASC, genome TEXT NOT NULL, version TEXT NOT NULL);",
@@ -110,6 +126,9 @@ for file_desc in files:
     record = 1
     gene_record_id = 0
     transcript_record_id = 0
+
+    gene_types = {}
+    transcript_types = {}
 
     with gzip.open(
         file_desc[1],
@@ -134,6 +153,7 @@ for file_desc in files:
             gene_name = "n/a"
             gene_type = "n/a"
             transcript_id = "n/a"
+            transcript_type = "n/a"
             exon_id = "n/a"
             chr = ""
             start = 0
@@ -177,13 +197,19 @@ for file_desc in files:
 
             if matcher:
                 gene_type = re.sub(r"\..+", "", matcher.group(1))
-                tags.add(f"type:{gene_type}")
+                tags.add(f"gene_type:{gene_type}")
 
             # transcript
             matcher = re.search(r'transcript_id "(.+?)";', tokens[8])
 
             if matcher:
                 transcript_id = re.sub(r"\..+", "", matcher.group(1))
+
+            matcher = re.search(r'transcript_type "(.+?)";', tokens[8])
+
+            if matcher:
+                transcript_type = re.sub(r"\..+", "", matcher.group(1))
+                tags.add(f"transcript_type:{transcript_type}")
 
             # exon
             matcher = re.search(r'exon_id "(.+?)";', tokens[8])
@@ -213,9 +239,21 @@ for file_desc in files:
             # exon_id = id_map.get(exon_id, 1)
             # gene_type = id_map.get(gene_type, 1)
 
+            if gene_type not in gene_types:
+                cursor.execute("INSERT INTO gene_type (name) VALUES (?)", (gene_type,))
+                gene_types[gene_type] = len(gene_types) + 1
+            gene_type_id = gene_types[gene_type]
+
+            if transcript_type not in transcript_types:
+                cursor.execute(
+                    "INSERT INTO transcript_type (name) VALUES (?)", (transcript_type,)
+                )
+                transcript_types[transcript_type] = len(transcript_types) + 1
+            transcript_type_id = transcript_types[transcript_type]
+
             if level == "gene":
                 cursor.execute(
-                    "INSERT INTO genes (gene_id, gene_symbol, chr, start, end, tss, strand, gene_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO gene (gene_id, gene_symbol, chr, start, end, tss, strand, gene_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         gene_id,
                         gene_name,
@@ -224,20 +262,27 @@ for file_desc in files:
                         end,
                         stranded_start,
                         strand,
-                        gene_type,
+                        gene_type_id,
                     ),
                 )
                 # record = cursor.lastrowid
             elif level == "transcript":
                 cursor.execute(
-                    "INSERT INTO transcripts (transcript_id, gene_id, start, end, is_canonical) VALUES (?, ?, ?, ?, ?)",
-                    (transcript_id, gene_record_id, start, end, is_canonical),
+                    "INSERT INTO transcript (transcript_id, gene_id, start, end, is_canonical, transcript_type_id) VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        transcript_id,
+                        gene_record_id,
+                        start,
+                        end,
+                        is_canonical,
+                        transcript_type_id,
+                    ),
                 )
                 # record = cursor.lastrowid
             elif level == "exon":
 
                 cursor.execute(
-                    "INSERT INTO exons (exon_id, transcript_id, exon_number, start, end) VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO exon (exon_id, transcript_id, exon_number, start, end) VALUES (?, ?, ?, ?, ?)",
                     (
                         exon_id,
                         transcript_record_id,

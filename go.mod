@@ -12,7 +12,7 @@ replace github.com/antonybholmes/go-sys => ../go-sys
 
 require github.com/antonybholmes/go-basemath v0.0.0-20250718220222-02e267b47e76
 
-require github.com/antonybholmes/go-dna v0.0.0-20250718220218-68676e6ecf3a
+require github.com/antonybholmes/go-dna v0.0.0-20250731210107-8a77962e05e0
 
 require (
 	github.com/antonybholmes/go-sys v0.0.0-20250711230729-977770033804
@@ -33,6 +33,6 @@ require (
 	golang.org/x/crypto v0.40.0 // indirect
 	golang.org/x/exp v0.0.0-20250718183923-645b1fa84792 // indirect
 	golang.org/x/net v0.42.0 // indirect
-	golang.org/x/sys v0.34.0 // indirect
+	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/text v0.27.0 // indirect
 )

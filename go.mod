@@ -1,8 +1,6 @@
 module github.com/antonybholmes/go-genome
 
-go 1.24
-
-toolchain go1.24.0
+go 1.25
 
 replace github.com/antonybholmes/go-basemath => ../go-basemath
 
@@ -10,12 +8,12 @@ replace github.com/antonybholmes/go-dna => ../go-dna
 
 replace github.com/antonybholmes/go-sys => ../go-sys
 
-require github.com/antonybholmes/go-basemath v0.0.0-20250718220222-02e267b47e76
+require github.com/antonybholmes/go-basemath v0.0.0-20250812213434-6cf4f7c1176d
 
-require github.com/antonybholmes/go-dna v0.0.0-20250731210107-8a77962e05e0
+require github.com/antonybholmes/go-dna v0.0.0-20250812213427-91ff8602981d
 
 require (
-	github.com/antonybholmes/go-sys v0.0.0-20250711230729-977770033804
+	github.com/antonybholmes/go-sys v0.0.0-20250812213435-bed670f8992a
 	github.com/rs/zerolog v1.34.0
 )
 
@@ -31,7 +29,7 @@ require (
 	github.com/xuri/excelize/v2 v2.9.1 // indirect
 	github.com/xuri/nfp v0.0.1 // indirect
 	golang.org/x/crypto v0.41.0 // indirect
-	golang.org/x/exp v0.0.0-20250811191247-51f88131bc50 // indirect
+	golang.org/x/exp v0.0.0-20250813145105-42675adae3e6 // indirect
 	golang.org/x/net v0.43.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/text v0.28.0 // indirect

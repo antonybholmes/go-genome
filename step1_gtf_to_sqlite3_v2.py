@@ -48,7 +48,9 @@ GENES_SQL = """CREATE TABLE gene
     end INT NOT NULL DEFAULT 1,
     tss INT NOT NULL DEFAULT 1,
     strand CHAR(1) NOT NULL DEFAULT '+',
-    gene_type_id INT NOT NULL REFERENCES gene_type(id));"""
+    gene_type_id INT NOT NULL,
+    FOREIGN KEY (gene_type_id) REFERENCES gene_type(id)
+);"""
 
 TRANSCRIPT_TYPES_SQL = """CREATE TABLE transcript_type 
     (id INTEGER PRIMARY KEY ASC,
@@ -56,21 +58,28 @@ TRANSCRIPT_TYPES_SQL = """CREATE TABLE transcript_type
 
 TRANSCRIPTS_SQL = """CREATE TABLE transcript 
     (id INTEGER PRIMARY KEY ASC,
-    gene_id INT NOT NULL REFERENCES gene(id),
+    gene_id INT NOT NULL,
     transcript_id TEXT NOT NULL DEFAULT '',
     start INT NOT NULL DEFAULT 1,
     end INT NOT NULL DEFAULT 1,
+    tss INT NOT NULL DEFAULT 1,
     is_canonical INT NOT NULL DEFAULT 0,
-    transcript_type_id INT NOT NULL REFERENCES transcript_type(id));"""
+    transcript_type_id INT NOT NULL,
+    FOREIGN KEY (gene_id) REFERENCES gene(id),
+    FOREIGN KEY (transcript_type_id) REFERENCES transcript_type(id)
+);"""
 
 
 EXONS_SQL = """CREATE TABLE exon 
     (id INTEGER PRIMARY KEY ASC,
-    transcript_id INT NOT NULL REFERENCES transcript(id),
+    transcript_id INT NOT NULL,
     exon_id TEXT NOT NULL DEFAULT '',
     exon_number INT NOT NULL DEFAULT 1,
     start INT NOT NULL DEFAULT 1,
-    end INT NOT NULL DEFAULT 1);"""
+    end INT NOT NULL DEFAULT 1,
+    FOREIGN KEY (transcript_id) REFERENCES transcript(id)
+);"""
+
 
 for file_desc in files:
     print(file_desc)
@@ -80,44 +89,18 @@ for file_desc in files:
         os.remove(db)
 
     # Connect to the SQLite database
-    conn = sqlite3.connect(f"data/modules/genome/{file_desc[0][0]}.db")
+    conn = sqlite3.connect(db)
     cursor = conn.cursor()
 
     cursor.execute("PRAGMA journal_mode = WAL;")
     cursor.execute("PRAGMA foreign_keys = ON;")
+    cursor.execute("BEGIN TRANSACTION;")
+
     cursor.execute(GENE_TYPES_SQL)
     cursor.execute(TRANSCRIPT_TYPES_SQL)
     cursor.execute(GENES_SQL)
     cursor.execute(TRANSCRIPTS_SQL)
     cursor.execute(EXONS_SQL)
-
-    cursor.execute("CREATE INDEX idx_gene_gene_id ON gene(gene_id);")
-    cursor.execute("CREATE INDEX idx_gene_gene_symbol ON gene(gene_symbol);")
-    cursor.execute("CREATE INDEX idx_gene_gene_type_id ON gene(gene_type_id);")
-    cursor.execute(
-        "CREATE INDEX idx_gene_chr_start_end_strand ON gene(chr, start, end, strand);"
-    )
-
-    cursor.execute(
-        "CREATE INDEX idx_transcript_transcript_id ON transcript(transcript_id);"
-    )
-    cursor.execute("CREATE INDEX idx_transcript_gene_id ON transcript(gene_id);")
-    cursor.execute("CREATE INDEX idx_transcript_start_end ON transcript(start, end);")
-    cursor.execute(
-        "CREATE INDEX idx_transcript_transcript_type_id ON transcript(transcript_type_id);"
-    )
-
-    cursor.execute("CREATE INDEX idx_exon_exon_id ON exon(exon_id);")
-    cursor.execute("CREATE INDEX idx_exon_transcript_id ON exon(transcript_id);")
-    cursor.execute("CREATE INDEX idx_exon_start_end ON exon(start, end);")
-
-    cursor.execute(
-        f"CREATE TABLE info (id INTEGER PRIMARY KEY ASC, genome TEXT NOT NULL, version TEXT NOT NULL);",
-    )
-
-    cursor.execute(
-        f"INSERT INTO info (genome, version) VALUES('{file_desc[0][0]}', '{file_desc[0][1]}');",
-    )
 
     cursor.execute("END TRANSACTION;")
 
@@ -161,6 +144,12 @@ for file_desc in files:
             stranded_start = 0
             stranded_end = 0
 
+            if "Ensembl_canonical" in line or "appris_principal" in line:
+                tags.add("canonical:true")
+                is_canonical = 1
+            else:
+                is_canonical = 0
+
             if level == "gene":
                 parent_record_id = -1
                 gene_record_id += 1
@@ -169,12 +158,6 @@ for file_desc in files:
                 parent_record_id = gene_record_id
                 transcript_record_id += 1
                 exon_number = 1
-
-                if "Ensembl_canonical" in line:
-                    tags.add("canonical:true")
-                    is_canonical = 1
-                else:
-                    is_canonical = 0
 
             if level == "exon":
                 parent_record_id = transcript_record_id
@@ -249,6 +232,7 @@ for file_desc in files:
                     "INSERT INTO transcript_type (name) VALUES (?)", (transcript_type,)
                 )
                 transcript_types[transcript_type] = len(transcript_types) + 1
+
             transcript_type_id = transcript_types[transcript_type]
 
             if level == "gene":
@@ -268,24 +252,24 @@ for file_desc in files:
                 # record = cursor.lastrowid
             elif level == "transcript":
                 cursor.execute(
-                    "INSERT INTO transcript (transcript_id, gene_id, start, end, is_canonical, transcript_type_id) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO transcript (transcript_id, gene_id, start, end, tss, is_canonical, transcript_type_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         transcript_id,
                         gene_record_id,
                         start,
                         end,
+                        stranded_start,
                         is_canonical,
                         transcript_type_id,
                     ),
                 )
                 # record = cursor.lastrowid
             elif level == "exon":
-
                 cursor.execute(
-                    "INSERT INTO exon (exon_id, transcript_id, exon_number, start, end) VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO exon (transcript_id, exon_id, exon_number, start, end) VALUES (?, ?, ?, ?, ?)",
                     (
-                        exon_id,
                         transcript_record_id,
+                        exon_id,
                         exon_number,
                         start,
                         end,
@@ -300,7 +284,41 @@ for file_desc in files:
 
             record += 1
 
-    # cursor.execute("COMMIT;")
+    cursor.execute("END TRANSACTION;")
+
+    cursor.execute("BEGIN TRANSACTION;")
+
+    cursor.execute("CREATE INDEX idx_gene_gene_id ON gene(gene_id);")
+    cursor.execute("CREATE INDEX idx_gene_gene_symbol ON gene(gene_symbol);")
+    cursor.execute("CREATE INDEX idx_gene_gene_type_id ON gene(gene_type_id);")
+    cursor.execute("CREATE INDEX idx_gene_tss ON gene(tss);")
+    cursor.execute(
+        "CREATE INDEX idx_gene_chr_start_end_strand ON gene(chr, start, end, strand);"
+    )
+
+    cursor.execute(
+        "CREATE INDEX idx_transcript_transcript_id ON transcript(transcript_id);"
+    )
+    cursor.execute("CREATE INDEX idx_transcript_gene_id ON transcript(gene_id);")
+    cursor.execute("CREATE INDEX idx_transcript_start_end ON transcript(start, end);")
+    cursor.execute("CREATE INDEX idx_transcript_tss ON transcript(tss);")
+    cursor.execute(
+        "CREATE INDEX idx_transcript_transcript_type_id ON transcript(transcript_type_id);"
+    )
+
+    cursor.execute("CREATE INDEX idx_exon_exon_id ON exon(exon_id);")
+    cursor.execute("CREATE INDEX idx_exon_transcript_id ON exon(transcript_id);")
+    cursor.execute("CREATE INDEX idx_exon_start_end ON exon(start, end);")
+
+    cursor.execute(
+        f"CREATE TABLE info (id INTEGER PRIMARY KEY ASC, genome TEXT NOT NULL, version TEXT NOT NULL);",
+    )
+
+    cursor.execute(
+        f"INSERT INTO info (genome, version) VALUES('{file_desc[0][0]}', '{file_desc[0][1]}');",
+    )
+
+    cursor.execute("END TRANSACTION;")
 
     # Commit and close
     conn.commit()

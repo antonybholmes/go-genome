@@ -16,26 +16,23 @@ import numpy as np
 import gzip
 import sqlite3
 
-tables = ["genes"]
-
-level_map = {"gene": 1, "transcript": 2, "exon": 3}
 
 files = [
     [
-        ["hg19", "ENCODE Blacklist hg19 v2"],
-        "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/encode/blacklists/hg19/hg19-blacklist.v2.bed",
+        ["hg19", "UCSC Centromere hg19 v2"],
+        "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/scripts/python/gal/assets/human/hg19/ucsc_centromeres_hg19.bed",
     ],
     [
-        ["grch38", "ENCODE Blacklist GRCh38 v2"],
-        "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/encode/blacklists/grch38/hg38-blacklist.v2.bed",
+        ["grch38", "UCSC Centromere GRCh38 v2"],
+        "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/scripts/python/gal/assets/human/grch38/ucsc_centromeres.bed",
     ],
     [
-        ["mm10", "ENCODE Blacklist mm10 v2"],
-        "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/encode/blacklists/mm10/mm10-blacklist.v2.bed",
+        ["mm10", "UCSC Centromere mm10 v2"],
+        "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/scripts/python/gal/assets/mouse/mm10/centromeres.bed",
     ],
 ]
 
-BLACKLIST_SQL = """CREATE TABLE blacklist 
+REGIONS_SQL = """CREATE TABLE regions 
     (id INTEGER PRIMARY KEY ASC,
     chr TEXT NOT NULL DEFAULT 'chr1',
     start INT NOT NULL DEFAULT 1,
@@ -46,7 +43,7 @@ BLACKLIST_SQL = """CREATE TABLE blacklist
 for file_desc in files:
     print(file_desc)
 
-    db = f"data/modules/genome/blacklist_{file_desc[0][0]}.db"
+    db = f"data/modules/genome/centromere_{file_desc[0][0]}.db"
     if os.path.exists(db):
         os.remove(db)
 
@@ -58,7 +55,7 @@ for file_desc in files:
     cursor.execute("PRAGMA foreign_keys = ON;")
     cursor.execute("BEGIN TRANSACTION;")
 
-    cursor.execute(BLACKLIST_SQL)
+    cursor.execute(REGIONS_SQL)
 
     cursor.execute("END TRANSACTION;")
 
@@ -80,7 +77,7 @@ for file_desc in files:
             notes = tokens[3] if len(tokens) > 3 else ""
 
             cursor.execute(
-                "INSERT INTO blacklist (chr, start, end, notes) VALUES (?, ?, ?, ?)",
+                "INSERT INTO regions (chr, start, end, notes) VALUES (?, ?, ?, ?)",
                 (chromosome, start, end, notes),
             )
 
@@ -89,7 +86,7 @@ for file_desc in files:
     cursor.execute("BEGIN TRANSACTION;")
 
     cursor.execute(
-        "CREATE INDEX idx_blacklist_chr_start_end_notes ON blacklist(chr, start, end, notes);"
+        "CREATE INDEX idx_regions_chr_start_end_notes ON regions(chr, start, end, notes);"
     )
 
     cursor.execute(

@@ -77,8 +77,8 @@ for file_desc in files:
             notes = tokens[3] if len(tokens) > 3 else ""
 
             cursor.execute(
-                "INSERT INTO regions (chr, start, end, notes) VALUES (?, ?, ?, ?)",
-                (chromosome, start, end, notes),
+                "INSERT INTO regions (chr, start, end) VALUES (?, ?, ?)",
+                (chromosome, start, end),
             )
 
     cursor.execute("END TRANSACTION;")

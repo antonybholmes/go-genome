@@ -7,13 +7,7 @@ Created on Thu Jun 26 10:35:40 2014
 @author: Antony Holmes
 """
 
-import sys
-import collections
-import re
 import os
-import pandas as pd
-import numpy as np
-import gzip
 import sqlite3
 
 
@@ -77,8 +71,8 @@ for file_desc in files:
             notes = tokens[3] if len(tokens) > 3 else ""
 
             cursor.execute(
-                "INSERT INTO regions (chr, start, end, notes) VALUES (?, ?, ?, ?)",
-                (chromosome, start, end, notes),
+                "INSERT INTO regions (chr, start, end) VALUES (?, ?, ?)",
+                (chromosome, start, end),
             )
 
     cursor.execute("END TRANSACTION;")

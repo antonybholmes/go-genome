@@ -95,7 +95,7 @@ const WITHIN_GENE_AND_PROMOTER_SQL = STANDARD_GENE_FIELDS +
 const IN_EXON_SQL = STANDARD_GENE_FIELDS +
 	`, ?2 - g.tss as tss_dist
 	FROM gtf AS g
- 	WHERE g.feature = 'exon' AND g.gene_id = ?1 AND (g.start <= ?4 AND g.end >= ?3)
+ 	WHERE g.feature = 'exon' AND g.transcript_id = ?1 AND (g.start <= ?4 AND g.end >= ?3)
  	ORDER BY g.start, g.end DESC`
 
 // If start is less x2 and end is greater than x1, it constrains the feature to be overlapping
@@ -648,7 +648,7 @@ func (genedb *GeneDB) WithinGenesAndPromoter(location *dna.Location, pad5p uint,
 	return rowsToFeatures(location, rows, FEATURE_TRANSCRIPT)
 }
 
-func (genedb *GeneDB) InExon(location *dna.Location, geneId string) (*GenomicFeatures, error) {
+func (genedb *GeneDB) InExon(location *dna.Location, transcriptId string) (*GenomicFeatures, error) {
 
 	// rows, err := genedb.inExonStmt.Query(
 	// 	mid,
@@ -660,7 +660,7 @@ func (genedb *GeneDB) InExon(location *dna.Location, geneId string) (*GenomicFea
 	// 	location.End)
 
 	rows, err := genedb.DB.Query(IN_EXON_SQL,
-		geneId,
+		transcriptId,
 		location.Mid(),
 		location.Start,
 		location.End)
@@ -672,7 +672,7 @@ func (genedb *GeneDB) InExon(location *dna.Location, geneId string) (*GenomicFea
 	return rowsToFeatures(location, rows, FEATURE_EXON)
 }
 
-func (genedb *GeneDB) ClosestGenes(location *dna.Location, closestN uint8, feature Feature) (*GenomicFeatures, error) {
+func (genedb *GeneDB) ClosestGenes(location *dna.Location, closestN uint16, feature Feature) (*GenomicFeatures, error) {
 	mid := (location.Start + location.End) / 2
 
 	// rows, err := genedb.closestGeneStmt.Query(mid,

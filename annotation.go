@@ -2,6 +2,7 @@ package genome
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/antonybholmes/go-dna"
@@ -26,6 +27,17 @@ const OUTPUT_FEATURE_SEP string = "|"
 // 	TssDist   int             `json:"tssDist"`
 // }
 
+type AnnotationGene struct {
+	GeneId     string `json:"geneId"`
+	GeneName   string `json:"geneName"`
+	PromLabel  string `json:"promLabel"`
+	Strand     string `json:"strand"`
+	IsPromoter bool   `json:"-"`
+	IsIntronic bool   `json:"-"`
+	IsExon     bool   `json:"-"`
+	TssDist    int    `json:"tssDist"`
+}
+
 type GeneAnnotation struct {
 	Location *dna.Location `json:"loc"`
 	// GeneIds      string            `json:"geneIds"`
@@ -34,17 +46,8 @@ type GeneAnnotation struct {
 	// PromLabels   string            `json:"promLabels"`
 	// TSSDists     string            `json:"tssDists"`
 	// Locations    string            `json:"geneLocs"`
-	WithinGenes  []*GenomicFeature `json:"withinGenes"`
-	ClosestGenes []*GenomicFeature `json:"closestGenes"`
-}
-
-type GeneProm struct {
-	Feature    *GenomicFeature
-	IsPromoter bool
-	IsIntronic bool
-	IsExon     bool
-	AbsD       uint
-	D          int
+	WithinGenes  []*AnnotationGene `json:"withinGenes"`
+	ClosestGenes []*AnnotationGene `json:"closestGenes"`
 }
 
 // type ByAbsD []GeneProm
@@ -78,7 +81,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 
 	log.Debug().Msgf("Annotating location %s %s", location, annotateDb.GeneDb.File)
 
-	transcriptsWithin, err := annotateDb.GeneDb.WithinGenesAndPromoter(
+	genesWithin, err := annotateDb.GeneDb.WithinGenesAndPromoter(
 		location,
 		annotateDb.TSSRegion.Offset5P(),
 		annotateDb.TSSRegion.Offset3P(),
@@ -90,18 +93,18 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 
 	// we need the unique ids to symbols
 	//idMap := make(map[string]string)
-	//promoterMap := make(map[string]*GeneProm)
+	withinMap := make(map[string]AnnotationGene)
 
 	//let mut distMap: HashMap<&str, bool> = HashMap::new();
 
-	for _, gene := range transcriptsWithin.Features {
+	for _, gene := range genesWithin.Features {
 		id := gene.GeneId
 
 		//idMap[id] = gene.GeneName
 
 		//let labels = annotate.classify_location(location, gene);
 
-		exons, err := annotateDb.GeneDb.InExon(location, id)
+		exons, err := annotateDb.GeneDb.InExon(location, gene.TranscriptId)
 
 		if err != nil {
 			return nil, err
@@ -115,8 +118,6 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 				mid <= gene.Location.End+annotateDb.TSSRegion.Offset5P())
 
 		isIntronic := mid >= gene.Location.Start && mid <= gene.Location.End
-
-		gene.PromLabel = MakePromLabel(isPromoter, isExon, isIntronic)
 
 		// var d int = 0
 
@@ -132,34 +133,42 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 
 		//absD := uint(basemath.AbsInt(gene.TssDist))
 
-		// prom, ok := promoterMap[id]
+		prom, ok := withinMap[id]
 
-		// if ok {
-		// 	// we test all transcripts to see if we can classify the gene
-		// 	// hence we OR the tests since we want to make as many of
-		// 	// them true as possible
-		// 	prom.IsIntronic = prom.IsIntronic || isIntronic
-		// 	prom.IsPromoter = prom.IsPromoter || isPromoter
-		// 	prom.IsExon = prom.IsExon || len(exons.Features) > 0
-
-		// 	// record the feature that is closest to our site
-		// 	if absD < prom.AbsD {
-		// 		prom.Feature = gene
-		// 		prom.D = d
-		// 		prom.AbsD = absD
-		// 	}
-		// } else {
-		// 	promoterMap[id] = &GeneProm{
-		// 		Feature:    gene,
-		// 		IsPromoter: isPromoter,
-		// 		IsIntronic: isIntronic,
-		// 		IsExon:     isExon,
-		// 		D:          d,
-		// 		AbsD:       absD,
-		// 	}
-		// }
+		if ok {
+			// we test all transcripts to see if we can classify the gene
+			// hence we OR the tests since we want to make as many of
+			// them true as possible
+			prom.IsIntronic = prom.IsIntronic || isIntronic
+			prom.IsPromoter = prom.IsPromoter || isPromoter
+			prom.IsExon = prom.IsExon || len(exons.Features) > 0
+			prom.PromLabel = MakePromLabel(isPromoter, isExon, isIntronic)
+		} else {
+			withinMap[id] = AnnotationGene{
+				GeneId:    gene.GeneId,
+				GeneName:  gene.GeneName,
+				PromLabel: gene.PromLabel,
+				Strand:    gene.Strand,
+				//IsPromoter: isPromoter,
+				//IsIntronic: isIntronic,
+				//IsExon:     isExon,
+				TssDist: gene.TssDist,
+			}
+		}
 
 	}
+
+	withinGenes := make([]*AnnotationGene, 0, len(withinMap))
+
+	for _, gene := range withinMap {
+		withinGenes = append(withinGenes, &gene)
+	}
+
+	slices.SortFunc(withinGenes, func(a, b *AnnotationGene) int {
+		return int(a.TssDist) - int(b.TssDist)
+	})
+
+	// promoterMap := make(map[string]*GeneProm)
 
 	// sort the ids by distance
 	// distMap := make(map[uint][]string)
@@ -236,22 +245,94 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 	// 	featureLocations = append(featureLocations, p.Feature.ToLocation().String())
 	// }
 
-	closestGenes, err := annotateDb.GeneDb.ClosestGenes(location, annotateDb.ClosestN, FEATURE_GENE)
+	closestGenes, err := annotateDb.GeneDb.ClosestGenes(location, 1000, FEATURE_TRANSCRIPT)
 
 	if err != nil {
-		log.Debug().Msgf("Error xx closest genes for location %s: %v", location, err)
+		log.Debug().Msgf("Error closest genes for location %s: %v", location, err)
 		return nil, err
 	}
 
 	//closestGeneList := make([]*ClosestGene, 0, len(closestGenes.Features)) //[]*ClosestGene{}
 
+	closestGeneIndexMap := make(map[string]uint8)
+
+	closestMap := make(map[uint8]*AnnotationGene)
+
 	for _, cg := range closestGenes.Features {
-		annotateDb.ClassifyFeature(location, cg)
+
+		// check cg.geneId in closestGeneMap
+		closestIndex, ok := closestGeneIndexMap[cg.GeneId]
+
+		if !ok {
+			closestIndex = uint8(len(closestGeneIndexMap) + 1)
+
+			if closestIndex > annotateDb.ClosestN {
+				closestIndex = 0
+			} else {
+				closestGeneIndexMap[cg.GeneId] = closestIndex
+			}
+		}
+
+		if closestIndex == 0 {
+			continue
+		}
+
+		exons, err := annotateDb.GeneDb.InExon(location, cg.TranscriptId)
+
+		if err != nil {
+			return nil, err
+		}
+
+		isExon := len(exons.Features) > 0
+
+		isPromoter := (cg.Strand == "+" && mid >= cg.Location.Start-annotateDb.TSSRegion.Offset5P() &&
+			mid <= cg.Location.Start+annotateDb.TSSRegion.Offset3P()) ||
+			(cg.Strand == "-" && mid >= cg.Location.End-annotateDb.TSSRegion.Offset3P() &&
+				mid <= cg.Location.End+annotateDb.TSSRegion.Offset5P())
+
+		isIntronic := mid >= cg.Location.Start && mid <= cg.Location.End
+
+		//annotateDb.ClassifyFeature(location, cg)
+		prom, ok := closestMap[closestIndex]
+
+		if ok {
+			// we test all transcripts to see if we can classify the gene
+			// hence we OR the tests since we want to make as many of
+			// them true as possible
+			prom.IsIntronic = prom.IsIntronic || isIntronic
+			prom.IsPromoter = prom.IsPromoter || isPromoter
+			prom.IsExon = prom.IsExon || len(exons.Features) > 0
+			prom.PromLabel = MakePromLabel(isPromoter, isExon, isIntronic)
+		} else {
+			closestMap[closestIndex] = &AnnotationGene{
+				GeneId:     cg.GeneId,
+				GeneName:   cg.GeneName,
+				PromLabel:  cg.PromLabel,
+				IsPromoter: isPromoter,
+				IsIntronic: isIntronic,
+				IsExon:     isExon,
+				TssDist:    cg.TssDist,
+				Strand:     cg.Strand,
+			}
+		}
 
 		// closestGeneList = append(closestGeneList, &ClosestGene{Feature: &cg,
 		// 	TssDist:   cg.TssDist,
 		// 	PromLabel: label})
 	}
+
+	orderedClosestGenes := make([]*AnnotationGene, 0, len(closestMap))
+
+	for i := 1; i <= int(annotateDb.ClosestN); i++ {
+		g, ok := closestMap[uint8(i)]
+		if ok {
+			orderedClosestGenes = append(orderedClosestGenes, g)
+		}
+	}
+
+	// slices.SortFunc(orderedClosestGenes, func(a, b *AnnotationGene) int {
+	// 	return int(a.TssDist) - int(b.TssDist)
+	// })
 
 	annotation := GeneAnnotation{
 		Location: location,
@@ -262,8 +343,8 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 
 		// TSSDists:     strings.Join(tssDists, OUTPUT_FEATURE_SEP),
 		// Locations:    strings.Join(featureLocations, OUTPUT_FEATURE_SEP),
-		WithinGenes:  transcriptsWithin.Features,
-		ClosestGenes: closestGenes.Features,
+		WithinGenes:  withinGenes,
+		ClosestGenes: orderedClosestGenes,
 	}
 
 	return &annotation, nil
@@ -293,7 +374,7 @@ func (annotateDb *AnnotateDb) ClassifyFeature(location *dna.Location, feature *G
 
 	isPromoter := (feature.Strand == "+" && mid >= start && mid <= feature.Location.Start+annotateDb.TSSRegion.Offset3P()) || (feature.Strand == "-" && mid >= feature.Location.End-annotateDb.TSSRegion.Offset3P() && mid <= end)
 
-	exons, err := annotateDb.GeneDb.InExon(location, feature.GeneId)
+	exons, err := annotateDb.GeneDb.InExon(location, feature.TranscriptId)
 
 	if err != nil {
 		return

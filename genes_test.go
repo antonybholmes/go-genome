@@ -18,7 +18,7 @@ func TestWithin(t *testing.T) {
 
 	location := dna.NewLocation("chr3", 187721370, 187733550)
 
-	records, err := db.WithinGenes(location, LEVEL_GENE)
+	records, err := db.WithinGenes(location, FEATURE_GENE)
 
 	if err != nil {
 		fmt.Println(err)

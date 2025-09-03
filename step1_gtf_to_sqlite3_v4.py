@@ -56,11 +56,12 @@ GTF_SQL = """CREATE TABLE gtf (
     strand TEXT NOT NULL DEFAULT '+',
     frame TEXT NOT NULL DEFAULT '.',
     gene_id TEXT NOT NULL DEFAULT '',
-    transcript_id TEXT NOT NULL DEFAULT '',
     gene_name TEXT NOT NULL DEFAULT '',
+    transcript_id TEXT NOT NULL DEFAULT '',
     transcript_name TEXT NOT NULL DEFAULT '',
     exon_number INTEGER NOT NULL DEFAULT 1,
     type TEXT NOT NULL DEFAULT '',
+    is_canonical BOOLEAN NOT NULL DEFAULT 0,
     attributes TEXT NOT NULL DEFAULT ''
 );
 """
@@ -91,6 +92,8 @@ def parse_gtf_line(line):
     if not re.match(r"^(gene|transcript|exon)$", feature):
         return None
 
+    is_canonical = "Ensembl_canonical" in line or "appris_principal" in line
+
     gtf = {
         "seqname": fields[0],
         "source": source,
@@ -101,6 +104,7 @@ def parse_gtf_line(line):
         "score": fields[5],
         "strand": fields[6],
         "frame": fields[7],
+        "is_canonical": is_canonical,
     }
 
     gtf["tss"] = int(fields[3]) if gtf["strand"] == "+" else int(fields[4])
@@ -181,6 +185,8 @@ for file_desc in files:
     cursor.execute("CREATE INDEX idx_gtf_coords ON gtf(seqname, start, end);")
 
     cursor.execute("CREATE INDEX idx_gtf_type ON gtf(type);")
+
+    cursor.execute("CREATE INDEX idx_gtf_is_canonical ON gtf(is_canonical);")
 
     cursor.execute(
         f"CREATE TABLE info (id INTEGER PRIMARY KEY ASC, genome TEXT NOT NULL, version TEXT NOT NULL);",

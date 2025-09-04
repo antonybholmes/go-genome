@@ -521,7 +521,7 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location,
 }
 
 func (genedb *GeneDB) SearchForGeneByName(search string,
-	level Feature,
+	feature Feature,
 	n uint16,
 	fuzzy bool,
 	canonical bool,
@@ -546,7 +546,7 @@ func (genedb *GeneDB) SearchForGeneByName(search string,
 
 	var sql string
 
-	if level == FEATURE_GENE {
+	if feature == FEATURE_GENE {
 		sql = GENE_INFO_SQL
 	} else {
 		sql = TRANSCRIPT_INFO_SQL
@@ -642,7 +642,7 @@ func (genedb *GeneDB) WithinGenesAndPromoter(location *dna.Location, pad5p uint,
 	// 	pad,
 	// 	location.End)
 
-	log.Debug().Msgf("within genes and promoter %s %d %d pad5p=%d pad3p=%d %s", location.Chr, location.Start, location.End, pad5p, pad3p, WITHIN_GENE_AND_PROMOTER_SQL)
+	//log.Debug().Msgf("within genes and promoter %s %d %d pad5p=%d pad3p=%d %s", location.Chr, location.Start, location.End, pad5p, pad3p, WITHIN_GENE_AND_PROMOTER_SQL)
 
 	rows, err := genedb.DB.Query(WITHIN_GENE_AND_PROMOTER_SQL,
 		location.Chr,

@@ -8,13 +8,8 @@ Created on Thu Jun 26 10:35:40 2014
 """
 
 import json
-import sys
-import collections
 import re
 import os
-from attrs import fields
-import pandas as pd
-import numpy as np
 import gzip
 import sqlite3
 
@@ -48,6 +43,7 @@ GTF_SQL = """CREATE TABLE gtf (
     id INTEGER PRIMARY KEY,
     seqname TEXT NOT NULL DEFAULT '',
     source TEXT NOT NULL DEFAULT '',
+    level INTEGER NOT NULL DEFAULT 1,
     feature TEXT NOT NULL DEFAULT 'gene',
     start INTEGER NOT NULL DEFAULT 1,
     end INTEGER NOT NULL DEFAULT 1,
@@ -98,6 +94,7 @@ def parse_gtf_line(line):
         "seqname": fields[0],
         "source": source,
         "feature": feature,
+        "level": feature_map.get(feature, 1),
         # "feature_id": feature_map.get(feature, 1),
         "start": int(fields[3]),
         "end": int(fields[4]),
@@ -127,7 +124,7 @@ def parse_gtf_line(line):
     gtf["transcript_id"] = attr_dict.get("transcript_id", "")
     gtf["gene_name"] = attr_dict.get("gene_name", "")
     gtf["transcript_name"] = attr_dict.get("transcript_name", "")
-    gtf["exon_number"] = int(attr_dict.get("exon_number", "1"))
+    gtf["exon_number"] = int(attr_dict.get("exon_number", "0"))
     gtf["attributes"] = ""  # atts
 
     return gtf
@@ -187,6 +184,8 @@ for file_desc in files:
     cursor.execute("CREATE INDEX idx_gtf_type ON gtf(type);")
 
     cursor.execute("CREATE INDEX idx_gtf_is_canonical ON gtf(is_canonical);")
+
+    cursor.execute("CREATE INDEX idx_gtf_level ON gtf(level);")
 
     cursor.execute(
         f"CREATE TABLE info (id INTEGER PRIMARY KEY ASC, genome TEXT NOT NULL, version TEXT NOT NULL);",

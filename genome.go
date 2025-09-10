@@ -229,27 +229,36 @@ const (
 	FEATURE_EXON       Feature = "exon"
 )
 
-// func (level Level) String() string {
-// 	switch level {
-// 	case LEVEL_EXON:
-// 		return "Exon"
-// 	case LEVEL_TRANSCRIPT:
-// 		return "Transcript"
-// 	default:
-// 		return "Gene"
-// 	}
-// }
+type Level uint8
 
-// func ParseLevel(level string) Level {
-// 	switch level {
-// 	case "t", "tran", "transcript", "2":
-// 		return LEVEL_TRANSCRIPT
-// 	case "e", "ex", "exon", "3":
-// 		return LEVEL_EXON
-// 	default:
-// 		return LEVEL_GENE
-// 	}
-// }
+const (
+	LEVEL_GENE       Level = 1
+	LEVEL_TRANSCRIPT Level = 2
+	LEVEL_EXON       Level = 3
+)
+
+func LevelToFeature(level Level) Feature {
+
+	switch level {
+	case LEVEL_TRANSCRIPT:
+		return FEATURE_TRANSCRIPT
+	case LEVEL_EXON:
+		return FEATURE_EXON
+	default:
+		return FEATURE_GENE
+	}
+}
+
+func FeatureToLevel(feature string) Level {
+	switch feature {
+	case "t", "tran", "transcript", "2":
+		return LEVEL_TRANSCRIPT
+	case "e", "ex", "exon", "3":
+		return LEVEL_EXON
+	default:
+		return LEVEL_GENE
+	}
+}
 
 type GeneDBCache struct {
 	cacheMap map[string]*GeneDB

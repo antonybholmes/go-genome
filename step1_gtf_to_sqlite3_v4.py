@@ -58,6 +58,7 @@ GTF_SQL = """CREATE TABLE gtf (
     exon_number INTEGER NOT NULL DEFAULT 1,
     type TEXT NOT NULL DEFAULT '',
     is_canonical BOOLEAN NOT NULL DEFAULT 0,
+    is_longest BOOLEAN NOT NULL DEFAULT 0,
     attributes TEXT NOT NULL DEFAULT ''
 );
 """
@@ -88,7 +89,9 @@ def parse_gtf_line(line):
     if not re.match(r"^(gene|transcript|exon)$", feature):
         return None
 
-    is_canonical = "Ensembl_canonical" in line or "appris_principal" in line
+    is_canonical = feature == "transcript" and (
+        "Ensembl_canonical" in line or "appris_principal" in line
+    )
 
     gtf = {
         "seqname": fields[0],
@@ -149,10 +152,15 @@ for file_desc in files:
 
     # Connect to the SQLite database
     conn = sqlite3.connect(db)
+    # Set the row factory to return named tuples
+    conn.row_factory = sqlite3.Row
+
     cursor = conn.cursor()
+    # cursor.fast_executemany = True
 
     cursor.execute("PRAGMA journal_mode = WAL;")
     cursor.execute("PRAGMA foreign_keys = ON;")
+
     cursor.execute("BEGIN TRANSACTION;")
 
     cursor.execute(GTF_SQL)
@@ -174,18 +182,29 @@ for file_desc in files:
 
     cursor.execute("END TRANSACTION;")
 
+    # Commit and close
+    # conn.commit()
+
     cursor.execute("BEGIN TRANSACTION;")
 
     cursor.execute(
         "CREATE INDEX idx_gtf_feature ON gtf(feature, seqname, tss, strand);"
     )
+
+    cursor.execute(
+        "CREATE INDEX idx_gtf_transcript ON gtf(feature, gene_id, transcript_id);"
+    )
+
     cursor.execute("CREATE INDEX idx_gtf_coords ON gtf(seqname, start, end);")
 
     cursor.execute("CREATE INDEX idx_gtf_type ON gtf(type);")
 
     cursor.execute("CREATE INDEX idx_gtf_is_canonical ON gtf(is_canonical);")
+    cursor.execute("CREATE INDEX idx_gtf_is_longest ON gtf(is_longest);")
 
     cursor.execute("CREATE INDEX idx_gtf_level ON gtf(level);")
+
+    # cursor.execute("CREATE INDEX idx_gtf_feature ON gtf(feature);")
 
     cursor.execute(
         f"CREATE TABLE info (id INTEGER PRIMARY KEY ASC, genome TEXT NOT NULL, version TEXT NOT NULL);",
@@ -197,6 +216,56 @@ for file_desc in files:
 
     cursor.execute("END TRANSACTION;")
 
-    # Commit and close
+    # conn.close()
+
+    # # Connect to the SQLite database
+    # conn = sqlite3.connect(db)
+    # # Set the row factory to return named tuples
+    # conn.row_factory = sqlite3.Row
+
+    # cursor = conn.cursor()
+    # cursor.execute("PRAGMA journal_mode = WAL;")
+    # cursor.execute("PRAGMA foreign_keys = ON;")
+
+    # fix is_canonical so every gene has one canonical transcript at least using
+    # the largest transcript if none marked as canonical
+    cursor.execute(
+        f"""
+        WITH max_lengths AS (
+            SELECT gene_id,
+            transcript_id,
+            ROW_NUMBER() OVER (PARTITION BY gene_id ORDER BY end - start DESC) AS rank
+            FROM gtf
+            WHERE feature = 'transcript'
+        )
+        SELECT * FROM max_lengths
+        WHERE rank = 1
+        ORDER BY gene_id, transcript_id;
+        """,
+    )
+
+    rows = cursor.fetchall()
+
+    cursor.execute("BEGIN TRANSACTION;")
+
+    queries = []
+
+    print(len(rows), "genes without canonical transcript")
+
+    for row in rows:
+        queries.append(
+            {"gene_id": row["gene_id"], "transcript_id": row["transcript_id"]}
+        )
+
+    cursor.executemany(
+        "UPDATE gtf SET is_longest = 1 WHERE feature = 'transcript' AND gene_id = :gene_id AND transcript_id = :transcript_id",
+        queries,
+    )
+
+    print(len(queries), "transcripts to set as longest")
+
+    cursor.execute("END TRANSACTION;")
+
     conn.commit()
+
     conn.close()

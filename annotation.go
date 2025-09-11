@@ -29,7 +29,7 @@ const OUTPUT_FEATURE_SEP string = "|"
 
 type AnnotationGene struct {
 	GeneId     string `json:"geneId"`
-	GeneName   string `json:"geneName"`
+	GeneSymbol string `json:"geneSymbol"`
 	PromLabel  string `json:"promLabel"`
 	Strand     string `json:"strand"`
 	IsPromoter bool   `json:"-"`
@@ -145,10 +145,10 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 			prom.PromLabel = MakePromLabel(isPromoter, isExon, isIntronic)
 		} else {
 			withinMap[id] = AnnotationGene{
-				GeneId:    gene.GeneId,
-				GeneName:  gene.GeneName,
-				PromLabel: MakePromLabel(isPromoter, isExon, isIntronic),
-				Strand:    gene.Location.Strand,
+				GeneId:     gene.GeneId,
+				GeneSymbol: gene.GeneName,
+				PromLabel:  MakePromLabel(isPromoter, isExon, isIntronic),
+				Strand:     gene.Location.Strand,
 				//IsPromoter: isPromoter,
 				//IsIntronic: isIntronic,
 				//IsExon:     isExon,
@@ -203,7 +203,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 
 			closestAnnotations = append(closestAnnotations, &AnnotationGene{
 				GeneId:     cg.GeneId,
-				GeneName:   cg.GeneName,
+				GeneSymbol: cg.GeneName,
 				PromLabel:  MakePromLabel(isPromoter, isExon, isIntronic),
 				IsPromoter: isPromoter,
 				IsIntronic: isIntronic,

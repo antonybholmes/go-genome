@@ -180,21 +180,20 @@ const MAX_GENE_INFO_RESULTS uint16 = 100
 //  	ORDER BY start ASC`
 
 type GenomicFeature struct {
-	Location *dna.Location `json:"loc"`
-	GeneType string        `json:"geneType,omitempty"`
-	//Strand         string        `json:"strand"`
-	Feature        Feature `json:"feature"`
-	GeneId         string  `json:"geneId,omitempty"`
-	GeneName       string  `json:"geneName,omitempty"`
-	TranscriptId   string  `json:"transcriptId,omitempty"`
-	TranscriptName string  `json:"transcriptName,omitempty"`
-	ExonId         string  `json:"exonId,omitempty"`
-	//PromLabel      string            `json:"promLabel,omitempty"`
-	Children    []*GenomicFeature `json:"children,omitempty"`
-	ExonNumber  uint              `json:"exonNumber,omitempty"`
-	Id          uint              `json:"-"`
-	TssDist     int               `json:"tssDist,omitempty"`
-	IsCanonical bool              `json:"isCanonical"`
+	Location       *dna.Location     `json:"loc"`
+	Type           string            `json:"type,omitempty"`
+	Feature        Feature           `json:"feature"`
+	GeneId         string            `json:"geneId,omitempty"`
+	GeneSymbol     string            `json:"geneSymbol,omitempty"`
+	TranscriptId   string            `json:"transcriptId,omitempty"`
+	TranscriptName string            `json:"transcriptName,omitempty"`
+	ExonId         string            `json:"exonId,omitempty"`
+	Children       []*GenomicFeature `json:"children,omitempty"`
+	ExonNumber     uint              `json:"exonNumber,omitempty"`
+	Id             uint              `json:"-"`
+	TssDist        int               `json:"tssDist,omitempty"`
+	IsCanonical    bool              `json:"isCanonical,omitempty"`
+	IsLongest      bool              `json:"isLongest,omitempty"`
 }
 
 // func (feature *GenomicFeature) ToLocation() *dna.Location {
@@ -479,12 +478,12 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location,
 		case FEATURE_GENE:
 			if currentGene == nil || currentGene.GeneId != geneId {
 				feature := &GenomicFeature{Id: gid,
-					Location: location,
-					Feature:  FEATURE_GENE,
-					GeneName: geneName,
-					GeneId:   geneId,
+					Location:   location,
+					Feature:    FEATURE_GENE,
+					GeneSymbol: geneName,
+					GeneId:     geneId,
 					//Strand:   strand,
-					GeneType: geneType,
+					Type:     geneType,
 					Children: make([]*GenomicFeature, 0, 10)}
 
 				currentGene = feature
@@ -497,9 +496,9 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location,
 					Location: location,
 					//Strand:       strand,
 					Feature:      FEATURE_TRANSCRIPT,
-					GeneName:     geneName,
+					GeneSymbol:   geneName,
 					GeneId:       geneId,
-					GeneType:     geneType,
+					Type:         geneType,
 					IsCanonical:  isCanonical,
 					TranscriptId: transcriptId,
 					Children:     make([]*GenomicFeature, 0, 10)}
@@ -512,12 +511,12 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location,
 			feature := &GenomicFeature{Id: gid,
 				Location:     location,
 				Feature:      FEATURE_EXON,
-				GeneName:     geneName,
+				GeneSymbol:   geneName,
 				GeneId:       geneId,
 				TranscriptId: transcriptId,
 				ExonNumber:   exonNumber,
 				//Strand:       strand,
-				GeneType: geneType}
+				Type: geneType}
 			currentTranscript.Children = append(currentTranscript.Children, feature)
 		default:
 			// do nothing
@@ -867,8 +866,8 @@ func rowsToRecords(rows *sql.Rows) ([]*GenomicFeature, error) {
 			Location: location,
 			//Strand:       strand,
 			GeneId:       geneId,
-			GeneName:     geneName,
-			GeneType:     geneType,
+			GeneSymbol:   geneName,
+			Type:         geneType,
 			TranscriptId: transcriptId,
 			IsCanonical:  isCanonical,
 			TssDist:      d}

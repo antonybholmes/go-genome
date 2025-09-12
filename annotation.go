@@ -146,7 +146,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 		} else {
 			withinMap[id] = AnnotationGene{
 				GeneId:     gene.GeneId,
-				GeneSymbol: gene.GeneName,
+				GeneSymbol: gene.GeneSymbol,
 				PromLabel:  MakePromLabel(isPromoter, isExon, isIntronic),
 				Strand:     gene.Location.Strand,
 				//IsPromoter: isPromoter,
@@ -203,7 +203,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location) (*GeneAnnotation,
 
 			closestAnnotations = append(closestAnnotations, &AnnotationGene{
 				GeneId:     cg.GeneId,
-				GeneSymbol: cg.GeneName,
+				GeneSymbol: cg.GeneSymbol,
 				PromLabel:  MakePromLabel(isPromoter, isExon, isIntronic),
 				IsPromoter: isPromoter,
 				IsIntronic: isIntronic,

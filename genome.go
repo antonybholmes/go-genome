@@ -389,7 +389,7 @@ func (genedb *GeneDB) GeneDBInfo() (*GeneDBInfo, error) {
 }
 
 func (genedb *GeneDB) OverlappingGenes(location *dna.Location,
-	canonical bool,
+	canonicalMode bool,
 	geneTypeFilter string) ([]*GenomicFeature, error) {
 
 	var gid uint
@@ -418,9 +418,9 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location,
 
 	sql := OVERLAP_LOCATION_SQL
 
-	if canonical {
-		sql += " AND g.is_canonical = 1"
-	}
+	//if canonical {
+	//	sql += " AND (g.level = 1 OR g.is_canonical = 1)"
+	//}
 
 	if geneTypeFilter != "" {
 		sql += " AND g.type = ?4" + OVERLAP_ORDER_BY_SQL
@@ -468,6 +468,7 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location,
 		)
 
 		if err != nil {
+			//log.Debug().Msgf("error reading overlapping gene rows %s", err)
 			return nil, err //fmt.Errorf("there was an error with the database records")
 		}
 
@@ -492,7 +493,8 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location,
 				features = append(features, currentGene)
 			}
 		case FEATURE_TRANSCRIPT:
-			if currentTranscript == nil || currentTranscript.TranscriptId != transcriptId {
+			//if canonical mode only add if canonical
+			if (!canonicalMode || isCanonical) && (currentTranscript == nil || currentTranscript.TranscriptId != transcriptId) {
 				feature := &GenomicFeature{Id: gid,
 					Location: location,
 					//Strand:       strand,
@@ -509,22 +511,25 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location,
 				currentGene.Children = append(currentGene.Children, currentTranscript)
 			}
 		case FEATURE_EXON:
-			feature := &GenomicFeature{Id: gid,
-				Location:     location,
-				Feature:      FEATURE_EXON,
-				GeneSymbol:   geneName,
-				GeneId:       geneId,
-				TranscriptId: transcriptId,
-				ExonNumber:   exonNumber,
-				//Strand:       strand,
-				Type: geneType}
-			currentTranscript.Children = append(currentTranscript.Children, feature)
+			// only add exon if we have a current transcript
+			if currentTranscript != nil {
+				feature := &GenomicFeature{Id: gid,
+					Location:     location,
+					Feature:      FEATURE_EXON,
+					GeneSymbol:   geneName,
+					GeneId:       geneId,
+					TranscriptId: transcriptId,
+					ExonNumber:   exonNumber,
+					//Strand:       strand,
+					Type: geneType}
+				currentTranscript.Children = append(currentTranscript.Children, feature)
+			}
 		default:
 			// do nothing
 		}
 	}
 
-	log.Debug().Msgf("overlap gene row here %v", features)
+	//log.Debug().Msgf("overlap gene row here %v", len(features))
 
 	return features, nil
 }

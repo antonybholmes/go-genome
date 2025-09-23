@@ -478,6 +478,9 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location,
 
 		switch feature {
 		case FEATURE_GENE:
+			// only add a new gene if we don't already have it. We
+			// assume the rows are ordered by gene id hence if the
+			// id changes, we are processing a set of rows for a new gene
 			if currentGene == nil || currentGene.GeneId != geneId {
 				feature := &GenomicFeature{Id: gid,
 					Location:   location,
@@ -493,8 +496,13 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location,
 				features = append(features, currentGene)
 			}
 		case FEATURE_TRANSCRIPT:
-			//if canonical mode only add if canonical
-			if (!canonicalMode || isCanonical) && (currentTranscript == nil || currentTranscript.TranscriptId != transcriptId) {
+			//if canonical mode only add if transcript is canonical
+			// also only add if we have a current gene
+			// also only add if we don't already have this transcript
+			if currentGene != nil &&
+				geneId == currentGene.GeneId &&
+				(!canonicalMode || isCanonical) &&
+				(currentTranscript == nil || currentTranscript.TranscriptId != transcriptId) {
 				feature := &GenomicFeature{Id: gid,
 					Location: location,
 					//Strand:       strand,
@@ -511,8 +519,10 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location,
 				currentGene.Children = append(currentGene.Children, currentTranscript)
 			}
 		case FEATURE_EXON:
-			// only add exon if we have a current transcript
-			if currentTranscript != nil {
+			// only add exon if we have a current transcript and it matches
+			// the transcript id
+			if currentTranscript != nil &&
+				currentTranscript.TranscriptId == transcriptId {
 				feature := &GenomicFeature{Id: gid,
 					Location:     location,
 					Feature:      FEATURE_EXON,

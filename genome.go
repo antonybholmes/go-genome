@@ -34,7 +34,8 @@ const STANDARD_GENE_FIELDS = `SELECT DISTINCT
 	g.exon_number`
 
 const GENE_INFO_SQL = STANDARD_GENE_FIELDS +
-	` FROM gene AS g
+	`, 0 as tss_dist
+	FROM gtf AS g
  	WHERE g.feature = 'gene' AND (g.gene_name LIKE ?1 OR g.gene_id LIKE ?1)`
 
 const TRANSCRIPT_INFO_SQL = STANDARD_GENE_FIELDS +
@@ -564,7 +565,7 @@ func (genedb *GeneDB) SearchForGeneByName(search string,
 		sql += " AND t.is_canonical = 1"
 	}
 
-	orderSql := " ORDER BY g.seqname, g.start, g.end DESC"
+	//orderSql := " ORDER BY g.seqname, g.start, g.end, g.gene_name, g.transcript_id, g.exon_number"
 
 	if geneType != "" {
 		ids := strings.Split(strings.ToLower(geneType), ",")
@@ -584,17 +585,19 @@ func (genedb *GeneDB) SearchForGeneByName(search string,
 			args[i+2] = id
 		}
 
-		sql += fmt.Sprintf(" AND gene_type IN (%s)", strings.Join(placeholders, ",")) + orderSql + " LIMIT ?2"
+		sql += fmt.Sprintf(" AND gene_type IN (%s)", strings.Join(placeholders, ",")) + " LIMIT ?2"
 
 		rows, err = genedb.DB.Query(sql, args...)
 	} else {
-		sql += orderSql + " LIMIT ?2"
+		sql += " LIMIT ?2"
 
 		rows, err = genedb.DB.Query(sql, search, n)
 	}
 
+	//log.Debug().Msgf("search %s  ", sql)
+
 	if err != nil {
-		//log.Debug().Msgf("search %s  ", err)
+		//log.Debug().Msgf("err %s  ", err)
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
@@ -605,7 +608,10 @@ func (genedb *GeneDB) SearchForGeneByName(search string,
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
-	//sort.Sort(SortFeatureByPos(ret))
+	// put in order of position
+	SortFeaturesByPos(ret)
+
+	//log.Debug().Msgf("search found %d features", len(ret))
 
 	return ret, nil
 }
@@ -881,6 +887,7 @@ func rowsToRecords(rows *sql.Rows) ([]*GenomicFeature, error) {
 	return features, nil
 }
 
+// SortFeaturesByPos sorts features in place by chr, start, end
 func SortFeaturesByPos(features []*GenomicFeature) {
 	slices.SortFunc(features, func(a, b *GenomicFeature) int {
 		ci := dna.ChromToInt(a.Location.Chr)
@@ -891,10 +898,12 @@ func SortFeaturesByPos(features []*GenomicFeature) {
 			return int(ci) - int(cj)
 		}
 
+		// same chr so sort by position
 		if a.Location.Start != b.Location.Start {
 			return int(a.Location.Start) - int(b.Location.Start)
 		}
 
+		// same start so sort by end
 		return int(a.Location.End) - int(b.Location.End)
 	})
 }

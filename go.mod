@@ -8,9 +8,9 @@ replace github.com/antonybholmes/go-dna => ../go-dna
 
 replace github.com/antonybholmes/go-sys => ../go-sys
 
-require github.com/antonybholmes/go-basemath v0.0.0-20251010223602-92a820c702d3
+require github.com/antonybholmes/go-basemath v0.0.0-20251022134000-6e512f531258
 
-require github.com/antonybholmes/go-dna v0.0.0-20251010223558-e0817b4ebb8a
+require github.com/antonybholmes/go-dna v0.0.0-20251022133956-c16513ff7bf6
 
 require (
 	github.com/antonybholmes/go-sys v0.0.0-20251017225059-9b05304a0fc0
@@ -29,7 +29,7 @@ require (
 	github.com/xuri/excelize/v2 v2.10.0 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
 	golang.org/x/crypto v0.43.0 // indirect
-	golang.org/x/exp v0.0.0-20251017212417-90e834f514db // indirect
+	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
 	golang.org/x/net v0.46.0 // indirect
 	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/text v0.30.0 // indirect

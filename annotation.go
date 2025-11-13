@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/antonybholmes/go-dna"
-	"github.com/rs/zerolog/log"
+	"github.com/antonybholmes/go-sys/log"
 )
 
 const NA string = "n/a"

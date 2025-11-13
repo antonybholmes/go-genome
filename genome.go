@@ -13,7 +13,7 @@ import (
 	"github.com/antonybholmes/go-basemath"
 	"github.com/antonybholmes/go-dna"
 	"github.com/antonybholmes/go-sys"
-	"github.com/rs/zerolog/log"
+	"github.com/antonybholmes/go-sys/log"
 )
 
 const GENE_DB_INFO_SQL = `SELECT id, genome, version FROM info`

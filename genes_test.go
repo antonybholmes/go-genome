@@ -1,4 +1,4 @@
-package genome
+package genome_test
 
 import (
 	"encoding/json"
@@ -6,19 +6,21 @@ import (
 	"testing"
 
 	"github.com/antonybholmes/go-dna"
+	"github.com/antonybholmes/go-genome"
+	v2 "github.com/antonybholmes/go-genome/v2"
 )
 
 func TestWithin(t *testing.T) {
 	fmt.Println("Within")
 
-	file := fmt.Sprintf("../data/gene/%s.db", "grch38")
-	db := NewGeneDB("grch38", file)
+	//file := fmt.Sprintf("../data/gene/%s.db", "grch38")
+	db := v2.NewGeneDB("grch38", "../data/gene/")
 
 	defer db.Close()
 
 	location := dna.NewLocation("chr3", 187721370, 187733550)
 
-	records, err := db.WithinGenes(location, FEATURE_GENE)
+	records, err := db.WithinGenes(location, genome.GeneFeature)
 
 	if err != nil {
 		fmt.Println(err)
@@ -32,9 +34,9 @@ func TestWithin(t *testing.T) {
 func TestClosest(t *testing.T) {
 	fmt.Println("Closest")
 
-	file := fmt.Sprintf("../data/gene/%s.db", "grch38")
+	//file := fmt.Sprintf("../data/gene/%s.db", "grch38")
 
-	db := NewGeneDB("grch38", file)
+	db := v2.NewGeneDB("grch38", "../data/gene/")
 
 	defer db.Close()
 

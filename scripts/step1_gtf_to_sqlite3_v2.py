@@ -35,56 +35,55 @@ files = [
     ],
 ]
 
-GENE_TYPES_SQL = """CREATE TABLE gene_type 
+GENE_TYPES_SQL = """CREATE TABLE gene_types 
     (id INTEGER PRIMARY KEY ASC,
     name TEXT NOT NULL UNIQUE DEFAULT '');"""
 
-GENES_SQL = """CREATE TABLE gene 
+GENES_SQL = """CREATE TABLE genes 
     (id INTEGER PRIMARY KEY ASC,
     gene_id TEXT NOT NULL DEFAULT '',
     gene_symbol TEXT NOT NULL DEFAULT '',
     chr TEXT NOT NULL DEFAULT 'chr1',
     start INT NOT NULL DEFAULT 1,
     end INT NOT NULL DEFAULT 1,
-    tss INT NOT NULL DEFAULT 1,
     strand CHAR(1) NOT NULL DEFAULT '+',
     gene_type_id INT NOT NULL,
-    FOREIGN KEY (gene_type_id) REFERENCES gene_type(id)
+    FOREIGN KEY (gene_type_id) REFERENCES gene_types(id)
 );"""
 
-TRANSCRIPT_TYPES_SQL = """CREATE TABLE transcript_type 
+TRANSCRIPT_TYPES_SQL = """CREATE TABLE transcript_types 
     (id INTEGER PRIMARY KEY ASC,
     name TEXT NOT NULL UNIQUE DEFAULT '');"""
 
-TRANSCRIPTS_SQL = """CREATE TABLE transcript 
+TRANSCRIPTS_SQL = """CREATE TABLE transcripts 
     (id INTEGER PRIMARY KEY ASC,
     gene_id INT NOT NULL,
     transcript_id TEXT NOT NULL DEFAULT '',
     start INT NOT NULL DEFAULT 1,
     end INT NOT NULL DEFAULT 1,
-    tss INT NOT NULL DEFAULT 1,
     is_canonical INT NOT NULL DEFAULT 0,
+    is_longest INT NOT NULL DEFAULT 0,
     transcript_type_id INT NOT NULL,
-    FOREIGN KEY (gene_id) REFERENCES gene(id),
-    FOREIGN KEY (transcript_type_id) REFERENCES transcript_type(id)
+    FOREIGN KEY (gene_id) REFERENCES genes(id),
+    FOREIGN KEY (transcript_type_id) REFERENCES transcript_types(id)
 );"""
 
 
-EXONS_SQL = """CREATE TABLE exon 
+EXONS_SQL = """CREATE TABLE exons 
     (id INTEGER PRIMARY KEY ASC,
     transcript_id INT NOT NULL,
     exon_id TEXT NOT NULL DEFAULT '',
     exon_number INT NOT NULL DEFAULT 1,
     start INT NOT NULL DEFAULT 1,
     end INT NOT NULL DEFAULT 1,
-    FOREIGN KEY (transcript_id) REFERENCES transcript(id)
+    FOREIGN KEY (transcript_id) REFERENCES transcripts(id)
 );"""
 
 
 for file_desc in files:
     print(file_desc)
 
-    db = f"data/modules/genome/{file_desc[0][0]}.db"
+    db = f"../data/modules/genome/{file_desc[0][0]}.db"
     if os.path.exists(db):
         os.remove(db)
 
@@ -223,13 +222,13 @@ for file_desc in files:
             # gene_type = id_map.get(gene_type, 1)
 
             if gene_type not in gene_types:
-                cursor.execute("INSERT INTO gene_type (name) VALUES (?)", (gene_type,))
+                cursor.execute("INSERT INTO gene_types (name) VALUES (?)", (gene_type,))
                 gene_types[gene_type] = len(gene_types) + 1
             gene_type_id = gene_types[gene_type]
 
             if transcript_type not in transcript_types:
                 cursor.execute(
-                    "INSERT INTO transcript_type (name) VALUES (?)", (transcript_type,)
+                    "INSERT INTO transcript_types (name) VALUES (?)", (transcript_type,)
                 )
                 transcript_types[transcript_type] = len(transcript_types) + 1
 
@@ -237,14 +236,13 @@ for file_desc in files:
 
             if level == "gene":
                 cursor.execute(
-                    "INSERT INTO gene (gene_id, gene_symbol, chr, start, end, tss, strand, gene_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO genes (gene_id, gene_symbol, chr, start, end, strand, gene_type_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         gene_id,
                         gene_name,
                         chr,
                         start,
                         end,
-                        stranded_start,
                         strand,
                         gene_type_id,
                     ),
@@ -252,13 +250,12 @@ for file_desc in files:
                 # record = cursor.lastrowid
             elif level == "transcript":
                 cursor.execute(
-                    "INSERT INTO transcript (transcript_id, gene_id, start, end, tss, is_canonical, transcript_type_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO transcripts (gene_id, transcript_id, start, end, is_canonical, transcript_type_id) VALUES (?, ?, ?, ?, ?, ?)",
                     (
-                        transcript_id,
                         gene_record_id,
+                        transcript_id,
                         start,
                         end,
-                        stranded_start,
                         is_canonical,
                         transcript_type_id,
                     ),
@@ -266,7 +263,7 @@ for file_desc in files:
                 # record = cursor.lastrowid
             elif level == "exon":
                 cursor.execute(
-                    "INSERT INTO exon (transcript_id, exon_id, exon_number, start, end) VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO exons (transcript_id, exon_id, exon_number, start, end) VALUES (?, ?, ?, ?, ?)",
                     (
                         transcript_record_id,
                         exon_id,
@@ -288,27 +285,33 @@ for file_desc in files:
 
     cursor.execute("BEGIN TRANSACTION;")
 
-    cursor.execute("CREATE INDEX idx_gene_gene_id ON gene(gene_id);")
-    cursor.execute("CREATE INDEX idx_gene_gene_symbol ON gene(gene_symbol);")
-    cursor.execute("CREATE INDEX idx_gene_gene_type_id ON gene(gene_type_id);")
-    cursor.execute("CREATE INDEX idx_gene_tss ON gene(tss);")
+    cursor.execute("CREATE INDEX idx_genes_gene_id ON genes(gene_id);")
+    cursor.execute("CREATE INDEX idx_genes_gene_symbol ON genes(gene_symbol);")
+    cursor.execute("CREATE INDEX idx_genes_gene_type_id ON genes(gene_type_id);")
+    # cursor.execute("CREATE INDEX idx_genes_tss ON genes(tss);")
     cursor.execute(
-        "CREATE INDEX idx_gene_chr_start_end_strand ON gene(chr, start, end, strand);"
+        "CREATE INDEX idx_genes_chr_start_end_strand ON genes(chr, start, end, strand);"
     )
 
     cursor.execute(
-        "CREATE INDEX idx_transcript_transcript_id ON transcript(transcript_id);"
+        "CREATE INDEX idx_transcripts_transcript_id ON transcripts(transcript_id);"
     )
-    cursor.execute("CREATE INDEX idx_transcript_gene_id ON transcript(gene_id);")
-    cursor.execute("CREATE INDEX idx_transcript_start_end ON transcript(start, end);")
-    cursor.execute("CREATE INDEX idx_transcript_tss ON transcript(tss);")
+    cursor.execute("CREATE INDEX idx_transcripts_gene_id ON transcripts(gene_id);")
+    cursor.execute("CREATE INDEX idx_transcripts_start_end ON transcripts(start, end);")
     cursor.execute(
-        "CREATE INDEX idx_transcript_transcript_type_id ON transcript(transcript_type_id);"
+        "CREATE INDEX idx_transcripts_is_canonical ON transcripts(is_canonical);"
+    )
+    cursor.execute(
+        "CREATE INDEX idx_transcripts_is_longest ON transcripts(is_longest);"
     )
 
-    cursor.execute("CREATE INDEX idx_exon_exon_id ON exon(exon_id);")
-    cursor.execute("CREATE INDEX idx_exon_transcript_id ON exon(transcript_id);")
-    cursor.execute("CREATE INDEX idx_exon_start_end ON exon(start, end);")
+    cursor.execute(
+        "CREATE INDEX idx_transcripts_transcript_type_id ON transcripts(transcript_type_id);"
+    )
+
+    cursor.execute("CREATE INDEX idx_exons_exon_id ON exons(exon_id);")
+    cursor.execute("CREATE INDEX idx_exons_transcript_id ON exons(transcript_id);")
+    cursor.execute("CREATE INDEX idx_exons_start_end ON exons(start, end);")
 
     cursor.execute(
         f"CREATE TABLE info (id INTEGER PRIMARY KEY ASC, genome TEXT NOT NULL, version TEXT NOT NULL);",
@@ -319,6 +322,42 @@ for file_desc in files:
     )
 
     cursor.execute("END TRANSACTION;")
+
+    # work out who is longest transcript per gene
+    print("Finding longest transcripts...")
+
+    cursor.execute(
+        f"""
+        WITH max_lengths AS (
+            SELECT gene_id,
+            transcript_id,
+            ROW_NUMBER() OVER (PARTITION BY gene_id ORDER BY end - start DESC) AS rank
+            FROM transcripts
+        )
+        SELECT * FROM max_lengths
+        WHERE rank = 1
+        ORDER BY gene_id, transcript_id;
+        """,
+    )
+
+    rows = cursor.fetchall()
+
+    cursor.execute("BEGIN TRANSACTION;")
+
+    queries = []
+
+    for row in rows:
+        # print(row)
+        queries.append({"gene_id": row[0], "transcript_id": row[1]})
+
+    cursor.executemany(
+        "UPDATE transcripts SET is_longest = 1 WHERE gene_id = :gene_id AND transcript_id = :transcript_id",
+        queries,
+    )
+
+    cursor.execute("END TRANSACTION;")
+
+    print(len(queries), "transcripts to set as longest")
 
     # Commit and close
     conn.commit()

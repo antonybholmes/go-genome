@@ -253,9 +253,7 @@ for file_desc in files:
     print(len(rows), "genes without canonical transcript")
 
     for row in rows:
-        queries.append(
-            {"gene_id": row["gene_id"], "transcript_id": row["transcript_id"]}
-        )
+        queries.append({"gene_id": row[0], "transcript_id": row[1]})
 
     cursor.executemany(
         "UPDATE gtf SET is_longest = 1 WHERE feature = 'transcript' AND gene_id = :gene_id AND transcript_id = :transcript_id",

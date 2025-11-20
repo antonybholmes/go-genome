@@ -3,21 +3,25 @@ package genomedbcache
 import (
 	"sync"
 
-	gene "github.com/antonybholmes/go-genome"
+	"github.com/antonybholmes/go-genome"
+	v1 "github.com/antonybholmes/go-genome/v1"
 )
 
-var instance *gene.GeneDBCache
-var once sync.Once
+var (
+	instance *genome.GeneDBCache
+	once     sync.Once
+)
 
-func InitCache(dir string) *gene.GeneDBCache {
+func InitCache(dir string) *genome.GeneDBCache {
 	once.Do(func() {
-		instance = gene.NewGeneDBCache(dir)
+		//instance = genome.NewGeneDBCache(dir, v2.NewGeneDB)
+		instance = genome.NewGeneDBCache(dir, v1.NewGeneDB)
 	})
 
 	return instance
 }
 
-func GetInstance() *gene.GeneDBCache {
+func GetInstance() *genome.GeneDBCache {
 	return instance
 }
 
@@ -25,6 +29,7 @@ func Dir() string {
 	return instance.Dir()
 }
 
-func GeneDB(assembly string) (*gene.GeneDB, error) {
-	return instance.GeneDB(assembly)
+func GeneDB(assembly string) (genome.GeneDB, error) {
+	//return instance.GeneDB(assembly, v2.NewGeneDB)
+	return instance.GeneDB(assembly, v1.NewGeneDB)
 }

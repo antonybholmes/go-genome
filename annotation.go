@@ -72,7 +72,7 @@ func NewAnnotateDb(genesdb GeneDB, tssRegion *dna.PromoterRegion, closestN uint8
 	}
 }
 
-func (annotateDb *AnnotateDb) Annotate(location *dna.Location, featureLevel Feature) (*GeneAnnotation, error) {
+func (annotateDb *AnnotateDb) Annotate(location *dna.Location, levels Level) (*GeneAnnotation, error) {
 	//mid := location.Mid()
 
 	// extend search area to account  for promoter
@@ -86,7 +86,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location, featureLevel Feat
 
 	genesWithin, err := annotateDb.GeneDb.WithinGenesAndPromoter(
 		location,
-		featureLevel,
+		levels,
 		annotateDb.TSSRegion.Offset5P(),
 		annotateDb.TSSRegion.Offset3P(),
 	)
@@ -259,7 +259,7 @@ func GeneWithStrandLabel(id string, strand string) string {
 	return fmt.Sprintf("%s:%s", id, strand)
 }
 
-func MakePromLabel(isPromoter bool, isExon bool, isIntronic bool) string {
+func MakePromLabel(isPromoter bool, isExon bool, isIntragenic bool) string {
 	labels := make([]string, 0, 3)
 
 	if isPromoter {
@@ -270,12 +270,12 @@ func MakePromLabel(isPromoter bool, isExon bool, isIntronic bool) string {
 	if isExon {
 		labels = append(labels, Exonic)
 	} else {
-		if isIntronic {
+		if isIntragenic {
 			labels = append(labels, Intronic)
 		}
 	}
 
-	if isExon || isIntronic {
+	if isIntragenic {
 		labels = append(labels, Intragenic)
 	} else {
 		labels = append(labels, Intergenic)

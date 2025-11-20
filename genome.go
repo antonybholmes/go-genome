@@ -30,7 +30,7 @@ type (
 	}
 
 	Feature string
-	Level   uint8
+	Level   string
 
 	GeneDBCache struct {
 		cacheMap map[string]GeneDB
@@ -54,7 +54,7 @@ type (
 		IsLongest   bool              `json:"isLongest"`
 		InPromoter  bool              `json:"inPromoter"`
 		InExon      bool              `json:"inExon"`
-		PromLabel   string            `json:"promLabel,omitempty"`
+		Label       string            `json:"label,omitempty"`
 	}
 
 	GeneDB interface {
@@ -63,20 +63,20 @@ type (
 		Close() error
 
 		OverlappingGenes(location *dna.Location,
-			featureLevel Feature,
+			level Feature,
 			canonicalMode bool,
 			geneTypeFilter string) ([]*GenomicFeature, error)
 
 		SearchForGeneByName(search string,
-			featureLevel Feature,
+			level Feature,
 			fuzzy bool,
 			canonical bool,
 			geneType string,
 			n uint16) ([]*GenomicFeature, error)
 
-		WithinGenes(location *dna.Location, featureLevel Feature) (*GenomicFeatures, error)
+		WithinGenes(location *dna.Location, feature Feature) (*GenomicFeatures, error)
 
-		WithinGenesAndPromoter(location *dna.Location, featureLevel Feature, pad5p uint, pad3p uint) (*GenomicFeatures, error)
+		WithinGenesAndPromoter(location *dna.Location, levels Level, pad5p uint, pad3p uint) (*GenomicFeatures, error)
 
 		InExon(location *dna.Location, transcriptId string) (*GenomicFeatures, error)
 
@@ -98,9 +98,17 @@ const (
 	TranscriptFeature Feature = "transcript"
 	ExonFeature       Feature = "exon"
 
-	GeneLevel       Level = 1
-	TranscriptLevel Level = 2
-	ExonLevel       Level = 3
+	// GeneLevel       Level = 1
+	// TranscriptLevel Level = 2
+	// ExonLevel       Level = 3
+
+	AllLevels               Level = "gene,transcript,exon"
+	GeneLevels              Level = "gene"
+	TranscriptLevels        Level = "transcript"
+	ExonLevels              Level = "exon"
+	GeneAndTranscriptLevels Level = "gene,transcript"
+	GeneAndExonLevels       Level = "gene,exon"
+	TranscriptAndExonLevels Level = "transcript,exon"
 )
 
 // func (feature *GenomicFeature) ToLocation() *dna.Location {
@@ -119,28 +127,28 @@ func (feature *GenomicFeature) TSS() *dna.Location {
 	return dna.NewStrandedLocation(feature.Location.Chr, s, s, feature.Location.Strand)
 }
 
-func LevelToFeature(level Level) Feature {
+// func LevelToFeature(level Level) Feature {
 
-	switch level {
-	case TranscriptLevel:
-		return TranscriptFeature
-	case ExonLevel:
-		return ExonFeature
-	default:
-		return GeneFeature
-	}
-}
+// 	switch level {
+// 	case TranscriptLevel:
+// 		return TranscriptFeature
+// 	case ExonLevel:
+// 		return ExonFeature
+// 	default:
+// 		return GeneFeature
+// 	}
+// }
 
-func FeatureToLevel(feature string) Level {
-	switch feature {
-	case "t", "tran", "transcript", "2":
-		return TranscriptLevel
-	case "e", "ex", "exon", "3":
-		return ExonLevel
-	default:
-		return GeneLevel
-	}
-}
+// func FeatureToLevel(feature string) Level {
+// 	switch feature {
+// 	case "t", "tran", "transcript", "2":
+// 		return TranscriptLevel
+// 	case "e", "ex", "exon", "3":
+// 		return ExonLevel
+// 	default:
+// 		return GeneLevel
+// 	}
+// }
 
 func NewGeneDBCache(dir string, creator func(assembly string, dir string) GeneDB) *GeneDBCache {
 	cacheMap := make(map[string]GeneDB)
@@ -371,3 +379,18 @@ func SortFeaturesByPos(features []*GenomicFeature) {
 
 // 	return features[i].Location.End < features[j].Location.End
 // }
+
+func MaxLevel(levels Level) Feature {
+	var level Feature
+
+	switch strings.ToLower(string(levels)) {
+	case "gene", "genes":
+		level = GeneFeature
+	case "transcript", "transcripts":
+		level = TranscriptFeature
+	default:
+		level = GeneFeature
+	}
+
+	return level
+}

@@ -216,7 +216,7 @@ func (genedb *V2GeneDB) GeneDBInfo() (*genome.GeneDBInfo, error) {
 }
 
 func (genedb *V2GeneDB) OverlappingGenes(location *dna.Location,
-	featureLevel genome.Feature,
+	level genome.Feature,
 	canonicalMode bool,
 	geneTypeFilter string) ([]*genome.GenomicFeature, error) {
 
@@ -484,7 +484,9 @@ func (genedb *V2GeneDB) WithinGenes(location *dna.Location, feature genome.Featu
 	return genome.RowsToFeatures(location, feature, rows)
 }
 
-func (genedb *V2GeneDB) WithinGenesAndPromoter(location *dna.Location, featureLevel genome.Feature, pad5p uint, pad3p uint) (*genome.GenomicFeatures, error) {
+func (genedb *V2GeneDB) WithinGenesAndPromoter(location *dna.Location, levels genome.Level, pad5p uint, pad3p uint) (*genome.GenomicFeatures, error) {
+
+	level := genome.MaxLevel(levels)
 
 	// rows, err := genedb.withinGeneAndPromStmt.Query(
 	// 	mid,
@@ -514,7 +516,7 @@ func (genedb *V2GeneDB) WithinGenesAndPromoter(location *dna.Location, featureLe
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
-	return genome.RowsToFeatures(location, featureLevel, rows)
+	return genome.RowsToFeatures(location, level, rows)
 }
 
 func (genedb *V2GeneDB) InExon(location *dna.Location, transcriptId string) (*genome.GenomicFeatures, error) {

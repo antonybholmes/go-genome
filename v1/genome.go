@@ -318,7 +318,7 @@ func (genedb *V1GeneDB) GeneDBInfo() (*genome.GeneDBInfo, error) {
 }
 
 func (genedb *V1GeneDB) OverlappingGenes(location *dna.Location,
-	featureLevel genome.Feature,
+	level genome.Feature,
 	canonicalMode bool,
 	geneTypeFilter string) ([]*genome.GenomicFeature, error) {
 
@@ -376,11 +376,11 @@ func (genedb *V1GeneDB) OverlappingGenes(location *dna.Location,
 	// 	e.exon_id,
 	// 	e.exon_number,
 
-	return RowsToRecords(geneRows, featureLevel, canonicalMode)
+	return RowsToRecords(geneRows, genome.Level(level), canonicalMode)
 }
 
 func (genedb *V1GeneDB) SearchForGeneByName(search string,
-	feature genome.Feature,
+	level genome.Feature,
 	fuzzy bool,
 	canonical bool,
 	geneType string,
@@ -405,7 +405,7 @@ func (genedb *V1GeneDB) SearchForGeneByName(search string,
 
 	var sql string
 
-	if feature == genome.GeneFeature {
+	if level == genome.GeneFeature {
 		sql = GeneInfoSql
 	} else {
 		sql = TranscriptInfoSql
@@ -491,7 +491,7 @@ func (genedb *V1GeneDB) WithinGenes(location *dna.Location, feature genome.Featu
 	return genome.RowsToFeatures(location, feature, rows)
 }
 
-func (genedb *V1GeneDB) WithinGenesAndPromoter(location *dna.Location, featureLevel genome.Feature, pad5p uint, pad3p uint) (*genome.GenomicFeatures, error) {
+func (genedb *V1GeneDB) WithinGenesAndPromoter(location *dna.Location, levels genome.Level, pad5p uint, pad3p uint) (*genome.GenomicFeatures, error) {
 
 	// rows, err := genedb.withinGeneAndPromStmt.Query(
 	// 	mid,
@@ -521,7 +521,7 @@ func (genedb *V1GeneDB) WithinGenesAndPromoter(location *dna.Location, featureLe
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
-	return RowsToFeatures(location, featureLevel, rows)
+	return RowsToFeatures(location, levels, rows)
 }
 
 func (genedb *V1GeneDB) InExon(location *dna.Location, transcriptId string) (*genome.GenomicFeatures, error) {
@@ -633,7 +633,7 @@ func (genedb *V1GeneDB) ClosestGenes(location *dna.Location, closestN uint16) ([
 	return closest, nil
 }
 
-func RowsToRecords(rows *sql.Rows, feature genome.Feature, canonicalMode bool) ([]*genome.GenomicFeature, error) {
+func RowsToRecords(rows *sql.Rows, levels genome.Level, canonicalMode bool) ([]*genome.GenomicFeature, error) {
 	var gid uint
 	var chr string
 	var geneStart uint
@@ -668,7 +668,7 @@ func RowsToRecords(rows *sql.Rows, feature genome.Feature, canonicalMode bool) (
 	var currentTranscript *genome.GenomicFeature
 	var currentExon *genome.GenomicFeature
 
-	var features = make([]*genome.GenomicFeature, 0, 10)
+	var ret = make([]*genome.GenomicFeature, 0, 10)
 
 	for rows.Next() {
 		//err := geneRows.Scan(&id, &level, &chr, &start, &end, &strand, &geneId, &geneSymbol, &transcriptId, &exonId)
@@ -700,12 +700,14 @@ func RowsToRecords(rows *sql.Rows, feature genome.Feature, canonicalMode bool) (
 			return nil, err //fmt.Errorf("there was an error with the database records")
 		}
 
+		ls := string(levels)
+
 		//log.Debug().Msgf("overlap gene row %d %s %s %d-%d %s %s %s %s %t %s %s %d", gid, feature, chr, start, end, strand, geneId, geneName, geneType, isCanonical, transcriptId, transcriptName, exonNumber)
 
 		// only add a new gene if we don't already have it. We
 		// assume the rows are ordered by gene id hence if the
 		// id changes, we are processing a set of rows for a new gene
-		if feature == genome.GeneFeature && (currentGene == nil || currentGene.GeneId != geneId) {
+		if strings.Contains(ls, "gene") && (currentGene == nil || currentGene.GeneId != geneId) {
 			currentGene = &genome.GenomicFeature{Id: gid,
 				Location:   dna.NewStrandedLocation(chr, geneStart, geneEnd, strand),
 				Feature:    genome.GeneFeature,
@@ -715,20 +717,19 @@ func RowsToRecords(rows *sql.Rows, feature genome.Feature, canonicalMode bool) (
 				Type:     geneType,
 				Children: make([]*genome.GenomicFeature, 0, 10)}
 
-			features = append(features, currentGene)
+			ret = append(ret, currentGene)
 		}
 
 		if currentGene != nil {
 			currentGene.InPromoter = currentGene.InPromoter || inPromoter
 			currentGene.InExon = currentGene.InExon || inExon
-			currentGene.PromLabel = genome.MakePromLabel(currentGene.InPromoter, currentGene.InExon, true)
+			currentGene.Label = genome.MakePromLabel(currentGene.InPromoter, currentGene.InExon, true)
 		}
 
 		//if canonical mode only add if transcript is canonical
 		// also only add if we have a current gene
 		// also only add if we don't already have this transcript
-		if (feature != genome.ExonFeature) &&
-
+		if strings.Contains(ls, "transcript") &&
 			(currentTranscript == nil || currentTranscript.TranscriptId != transcriptId) &&
 			(!canonicalMode || isCanonical) {
 			currentTranscript = &genome.GenomicFeature{Id: gid,
@@ -748,7 +749,7 @@ func RowsToRecords(rows *sql.Rows, feature genome.Feature, canonicalMode bool) (
 			if currentGene != nil {
 				currentGene.Children = append(currentGene.Children, currentTranscript)
 			} else {
-				features = append(features, currentTranscript)
+				ret = append(ret, currentTranscript)
 			}
 		}
 
@@ -756,7 +757,7 @@ func RowsToRecords(rows *sql.Rows, feature genome.Feature, canonicalMode bool) (
 
 		if currentTranscript != nil {
 			currentTranscript.InExon = currentTranscript.InExon || inExon
-			currentTranscript.PromLabel = genome.MakePromLabel(currentTranscript.InPromoter, currentTranscript.InExon, true)
+			currentTranscript.Label = genome.MakePromLabel(currentTranscript.InPromoter, currentTranscript.InExon, true)
 		}
 
 		log.Debug().Msgf("2 current gene %v current transcript %v exon %v", currentGene, currentTranscript, currentExon)
@@ -764,47 +765,53 @@ func RowsToRecords(rows *sql.Rows, feature genome.Feature, canonicalMode bool) (
 		// only add exon if we have a current transcript and it matches
 		// the transcript id
 
-		currentExon = &genome.GenomicFeature{Id: gid,
-			Location:     dna.NewStrandedLocation(chr, exonStart, exonEnd, strand),
-			Feature:      genome.ExonFeature,
-			GeneSymbol:   geneSymbol,
-			GeneId:       geneId,
-			TranscriptId: transcriptId,
-			ExonId:       exonId,
-			ExonNumber:   exonNumber,
-			//InPromoter:   inPromoter,
-			InExon:    inExon,
-			PromLabel: genome.MakePromLabel(inPromoter, inExon, true),
-			//Strand:       strand,
-		}
+		if strings.Contains(ls, "exon") {
+			currentExon = &genome.GenomicFeature{Id: gid,
+				Location:     dna.NewStrandedLocation(chr, exonStart, exonEnd, strand),
+				Feature:      genome.ExonFeature,
+				GeneSymbol:   geneSymbol,
+				GeneId:       geneId,
+				TranscriptId: transcriptId,
+				ExonId:       exonId,
+				ExonNumber:   exonNumber,
+				//InPromoter:   inPromoter,
+				InExon: inExon,
+				Label:  genome.MakePromLabel(inPromoter, inExon, true),
+				//Strand:       strand,
+			}
 
-		if currentTranscript != nil {
-			currentTranscript.Children = append(currentTranscript.Children, currentExon)
-		} else {
-			features = append(features, currentExon)
+			if currentTranscript != nil {
+				currentTranscript.Children = append(currentTranscript.Children, currentExon)
+			} else if currentGene != nil {
+				// normally add to transcript, but if no transcript, add to gene
+				currentGene.Children = append(currentGene.Children, currentExon)
+			} else {
+				ret = append(ret, currentExon)
+			}
 		}
-
 	}
 
-	log.Debug().Msgf("overlap gene row here %v", features)
+	log.Debug().Msgf("overlap gene row here %v", ret)
 
-	return features, nil
+	return ret, nil
 }
 
-func RowsToFeatures(location *dna.Location, featureLevel genome.Feature, rows *sql.Rows) (*genome.GenomicFeatures, error) {
+func RowsToFeatures(location *dna.Location, levels genome.Level, rows *sql.Rows) (*genome.GenomicFeatures, error) {
 
 	//log.Debug().Msgf("rowsToFeatures %s   %d %d", location.Chr, location.Start, location.End)
 
 	// 10 seems a reasonable guess for the number of features we might see, just
 	// to reduce slice reallocation
-	features, err := RowsToRecords(rows, featureLevel, false)
+	features, err := RowsToRecords(rows, levels, false)
 
 	if err != nil {
 		log.Debug().Msgf("error converting rows to features %s", err)
 		return nil, err
 	}
 
-	ret := genome.GenomicFeatures{Location: location, Feature: featureLevel, Features: features}
+	var level = genome.MaxLevel(levels)
+
+	ret := genome.GenomicFeatures{Location: location, Feature: level, Features: features}
 
 	return &ret, nil
 }

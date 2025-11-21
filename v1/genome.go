@@ -47,17 +47,17 @@ const (
 		` FROM gtf AS g
  		WHERE g.feature = 'transcript' AND (g.gene_name LIKE ?1 OR g.gene_id LIKE ?1 OR g.transcript_id LIKE ?1)`
 
-		// const GENE_INFO_FUZZY_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_name, transcript_id, gene_type, 0 as tss_dist
-		//  	FROM gene
-		//   	WHERE (gene_name LIKE ?2 OR g.gene_id LIKE ?2 OR g.transcript_id LIKE ?2)
-		//  	ORDER BY chr, start
-		// 	LIMIT ?3`
+	// const GENE_INFO_FUZZY_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_name, transcript_id, gene_type, 0 as tss_dist
+	//  	FROM gene
+	//   	WHERE (gene_name LIKE ?2 OR g.gene_id LIKE ?2 OR g.transcript_id LIKE ?2)
+	//  	ORDER BY chr, start
+	// 	LIMIT ?3`
 
-	WithinGeneSql = StandardGeneFieldsSql +
-		`, ?3 - g.tss as tss_dist
-		FROM gtf AS g
-		WHERE g.feature = ?1 AND g.seqname = ?2 AND (g.start <= ?5 AND g.end >= ?4)
-		ORDER BY g.start`
+	// WithinGeneSql = StandardGeneFieldsSql +
+	// 	`, ?3 - g.tss as tss_dist
+	// 	FROM gtf AS g
+	// 	WHERE g.feature = ?1 AND g.seqname = ?2 AND (g.start <= ?5 AND g.end >= ?4)
+	// 	ORDER BY g.start`
 
 	TranscriptsPerGene = StandardGeneFieldsSql +
 		`, ?3 - g.tss as tss_dist
@@ -153,6 +153,9 @@ const (
 			((:start <= t.end + :prom5p) AND (:end >= t.start) AND g.strand = '-')
 		)
 		ORDER BY g.gene_id, t.transcript_id, e.exon_number`
+
+	InGeneSql = CoreGeneSql +
+		` WHERE g.chr = :chr AND (:start <= t.end AND :end >= t.start)`
 
 	ClosestGeneSql = CoreGeneSql +
 		` WHERE 
@@ -300,7 +303,7 @@ func (genedb *V1GeneDB) Close() error {
 }
 
 func (genedb *V1GeneDB) GeneDBInfo() (*genome.GeneDBInfo, error) {
-	var id uint
+	var id int
 	var g string
 	var version string
 
@@ -314,7 +317,7 @@ func (genedb *V1GeneDB) GeneDBInfo() (*genome.GeneDBInfo, error) {
 }
 
 func (genedb *V1GeneDB) OverlappingGenes(location *dna.Location,
-	level genome.Feature,
+	level string,
 	prom *dna.PromoterRegion,
 	canonicalMode bool,
 	geneTypeFilter string) ([]*genome.GenomicFeature, error) {
@@ -334,9 +337,9 @@ func (genedb *V1GeneDB) OverlappingGenes(location *dna.Location,
 		query += " AND gene_type = :geneType" + OverlapOrderBySql
 
 		geneRows, err = genedb.db.Query(query,
-			sql.Named("chr", location.Chr),
-			sql.Named("start", location.Start),
-			sql.Named("end", location.End),
+			sql.Named("chr", location.Chr()),
+			sql.Named("start", location.Start()),
+			sql.Named("end", location.End()),
 			sql.Named("mid", location.Mid()),
 			sql.Named("prom5p", prom.Upstream()),
 			sql.Named("prom3p", prom.Downstream()),
@@ -345,18 +348,16 @@ func (genedb *V1GeneDB) OverlappingGenes(location *dna.Location,
 		query += OverlapOrderBySql
 
 		geneRows, err = genedb.db.Query(query,
-			sql.Named("chr", location.Chr),
-			sql.Named("start", location.Start),
-			sql.Named("end", location.End),
+			sql.Named("chr", location.Chr()),
+			sql.Named("start", location.Start()),
+			sql.Named("end", location.End()),
 			sql.Named("mid", location.Mid()),
 			sql.Named("prom5p", prom.Upstream()),
 			sql.Named("prom3p", prom.Downstream()))
 	}
 
-	//log.Debug().Msgf("overlapping genes %s", query)
-
 	if err != nil {
-		//log.Debug().Msgf("error querying overlapping gene %s", err)
+		log.Error().Msgf("error querying overlapping gene %s", err)
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
@@ -383,11 +384,11 @@ func (genedb *V1GeneDB) OverlappingGenes(location *dna.Location,
 }
 
 func (genedb *V1GeneDB) SearchForGeneByName(search string,
-	level genome.Feature,
+	level string,
 	fuzzy bool,
 	canonical bool,
 	geneType string,
-	n uint16) ([]*genome.GenomicFeature, error) {
+	n int16) ([]*genome.GenomicFeature, error) {
 	n = max(1, min(n, genome.MaxGeneInfoResults))
 
 	// case insensitive search
@@ -396,8 +397,6 @@ func (genedb *V1GeneDB) SearchForGeneByName(search string,
 	if len(search) < 2 || strings.Contains(search, "chr:") {
 		return nil, fmt.Errorf("%s is an invalid search term", search)
 	}
-
-	//log.Debug().Msgf("search %s", search)
 
 	var rows *sql.Rows
 	var err error
@@ -447,103 +446,96 @@ func (genedb *V1GeneDB) SearchForGeneByName(search string,
 		rows, err = genedb.db.Query(sql, search, n)
 	}
 
-	//log.Debug().Msgf("search %s  ", sql)
-
 	if err != nil {
-		//log.Debug().Msgf("err %s  ", err)
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
 	ret, err := genome.RowsToRecords(rows)
 
 	if err != nil {
-		//log.Debug().Msgf("error reading rows %s", err)
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
 	// put in order of position
 	genome.SortFeaturesByPos(ret)
 
-	//log.Debug().Msgf("search found %d features", len(ret))
-
 	return ret, nil
 }
 
-func (genedb *V1GeneDB) WithinGenes(location *dna.Location, feature genome.Feature) (*genome.GenomicFeatures, error) {
+func (genedb *V1GeneDB) WithinGenes(location *dna.Location, feature string,
+	prom *dna.PromoterRegion) (*genome.GenomicFeatures, error) {
 
 	// rows, err := genedb.withinGeneStmt.Query(
 	// 	mid,
 	// 	level,
-	// 	location.Chr,
-	// 	location.Start,
-	// 	location.Start,
-	// 	location.End,
-	// 	location.End)
+	// 	location.Chr(),
+	// 	location.Start(),
+	// 	location.Start(),
+	// 	location.End(),
+	// 	location.End())
 
-	rows, err := genedb.db.Query(WithinGeneSql,
-		feature,
-		location.Chr,
-		location.Mid(),
-		location.Start,
-		location.End)
+	rows, err := genedb.db.Query(InGeneSql,
+		sql.Named("chr", location.Chr()),
+		sql.Named("mid", location.Mid()),
+		sql.Named("start", location.Start()),
+		sql.Named("end", location.End()),
+		sql.Named("prom5p", prom.Upstream()),
+		sql.Named("prom3p", prom.Downstream()))
 
 	if err != nil {
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
-	return genome.RowsToFeatures(location, feature, rows)
+	return RowsToFeatures(location, feature, rows)
 }
 
 func (genedb *V1GeneDB) WithinGenesAndPromoter(location *dna.Location,
-	levels genome.Feature,
-	prom *dna.PromoterRegion) (*genome.GenomicFeatures, error) {
+	levels string,
+	prom *dna.PromoterRegion) ([]*genome.GenomicFeature, error) {
 
 	// rows, err := genedb.withinGeneAndPromStmt.Query(
 	// 	mid,
 	// 	level,
-	// 	location.Chr,
+	// 	location.Chr(),
 	// 	pad,
-	// 	location.Start,
+	// 	location.Start(),
 	// 	pad,
-	// 	location.Start,
+	// 	location.Start(),
 	// 	pad,
-	// 	location.End,
+	// 	location.End(),
 	// 	pad,
-	// 	location.End)
-
-	//log.Debug().Msgf("within genes and promoter %s %d %d prom5p=%d prom3p=%d %s", location.Chr, location.Start, location.End, prom5p, prom3p, WITHIN_GENE_AND_PROMOTER_SQL)
+	// 	location.End())
 
 	rows, err := genedb.db.Query(InGeneAndPromoterSql,
-		sql.Named("chr", location.Chr),
+		sql.Named("chr", location.Chr()),
 		sql.Named("mid", location.Mid()),
-		sql.Named("start", location.Start),
-		sql.Named("end", location.End),
+		sql.Named("start", location.Start()),
+		sql.Named("end", location.End()),
 		sql.Named("prom5p", prom.Upstream()),
 		sql.Named("prom3p", prom.Downstream()))
 
 	if err != nil {
-		//log.Debug().Msgf("error querying within gene and promoter %s", err)
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
-	return RowsToFeatures(location, levels, rows)
+	return RowsToRecords(rows, levels, false)
 }
 
-func (genedb *V1GeneDB) InExon(location *dna.Location, transcriptId string, prom *dna.PromoterRegion) (*genome.GenomicFeatures, error) {
+func (genedb *V1GeneDB) InExon(location *dna.Location, transcriptId string, prom *dna.PromoterRegion) ([]*genome.GenomicFeature, error) {
 
 	// rows, err := genedb.inExonStmt.Query(
 	// 	mid,
 	// 	geneId,
-	// 	location.Chr,
-	// 	location.Start,
-	// 	location.Start,
-	// 	location.End,
-	// 	location.End)
+	// 	location.Chr(),
+	// 	location.Start(),
+	// 	location.Start(),
+	// 	location.End(),
+	// 	location.End())
 
 	rows, err := genedb.db.Query(InExonSql,
 		sql.Named("transcriptId", transcriptId),
-		sql.Named("start", location.Start),
-		sql.Named("end", location.End),
+		sql.Named("start", location.Start()),
+		sql.Named("end", location.End()),
 		sql.Named("mid", location.Mid()),
 		sql.Named("prom5p", prom.Upstream()),
 		sql.Named("prom3p", prom.Downstream()))
@@ -552,33 +544,30 @@ func (genedb *V1GeneDB) InExon(location *dna.Location, transcriptId string, prom
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
-	return RowsToFeatures(location, genome.ExonLevel, rows)
+	return RowsToRecords(rows, genome.ExonLevel, false)
 }
 
 func (genedb *V1GeneDB) ClosestGenes(location *dna.Location,
 	prom *dna.PromoterRegion,
-	closestN uint8) ([]*genome.GenomicFeature, error) {
+	closestN int8) ([]*genome.GenomicFeature, error) {
 
 	// rows, err := genedb.closestGeneStmt.Query(mid,
 	// 	level,
-	// 	location.Chr,
+	// 	location.Chr(),
 	// 	mid,
 
 	// 	n)
 
-	log.Debug().Msgf("closest %s", ClosestGeneSql)
-
 	rows, err := genedb.db.Query(ClosestGeneSql,
-		sql.Named("chr", location.Chr),
+		sql.Named("chr", location.Chr()),
 		sql.Named("mid", location.Mid()),
-		sql.Named("start", location.Start),
-		sql.Named("end", location.End),
+		sql.Named("start", location.Start()),
+		sql.Named("end", location.End()),
 		sql.Named("prom5p", prom.Upstream()),
 		sql.Named("prom3p", prom.Downstream()),
 		sql.Named("n", closestN))
 
 	if err != nil {
-		//log.Debug().Msgf("error querying closest gene %s %s ", sql, err)
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
@@ -611,8 +600,6 @@ func (genedb *V1GeneDB) ClosestGenes(location *dna.Location,
 	// 	WHERE g.feature = 'transcript'`
 
 	// sql += fmt.Sprintf(" AND g.gene_id IN (%s)", strings.Join(placeholders, ",")) + " ORDER BY g.gene_id, ABS(tss_dist)"
-
-	// //log.Debug().Msgf("closest transcripts %s", sql)
 
 	// rows, err = genedb.db.Query(sql, args...)
 
@@ -652,11 +639,11 @@ func (genedb *V1GeneDB) ClosestGenes(location *dna.Location,
 	// return closest, nil
 }
 
-func RowsToRecords(rows *sql.Rows, levels genome.Feature, canonicalMode bool) ([]*genome.GenomicFeature, error) {
-	var gid uint
+func RowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*genome.GenomicFeature, error) {
+	var gid int
 	var chr string
-	var geneStart uint
-	var geneEnd uint
+	var geneStart int
+	var geneEnd int
 	var strand string
 	var geneSymbol string
 	var geneId string
@@ -664,16 +651,16 @@ func RowsToRecords(rows *sql.Rows, levels genome.Feature, canonicalMode bool) ([
 
 	var transcriptId string
 	var transcriptType string
-	var transcriptStart uint
-	var transcriptEnd uint
+	var transcriptStart int
+	var transcriptEnd int
 
 	var isCanonical bool
 	var isLongest bool
 
 	var exonId string
-	var exonStart uint
-	var exonEnd uint
-	var exonNumber uint
+	var exonStart int
+	var exonEnd int
+	var exonNumber int
 
 	var tssDist int
 
@@ -717,20 +704,22 @@ func RowsToRecords(rows *sql.Rows, levels genome.Feature, canonicalMode bool) ([
 		)
 
 		if err != nil {
-			//log.Debug().Msgf("error reading overlapping gene rows %s", err)
+			log.Error().Msgf("error reading overlapping gene rows %s", err)
 			return nil, err //fmt.Errorf("there was an error with the database records")
 		}
-
-		ls := string(levels)
-
-		//log.Debug().Msgf("overlap gene row %d %s %s %d-%d %s %s %s %s %t %s %s %d", gid, feature, chr, start, end, strand, geneId, geneName, geneType, isCanonical, transcriptId, transcriptName, exonNumber)
 
 		// only add a new gene if we don't already have it. We
 		// assume the rows are ordered by gene id hence if the
 		// id changes, we are processing a set of rows for a new gene
-		if strings.Contains(ls, "gene") && (currentGene == nil || currentGene.GeneId != geneId) {
+		if strings.Contains(levels, "gene") && (currentGene == nil || currentGene.GeneId != geneId) {
+			location, err := dna.NewStrandedLocation(chr, geneStart, geneEnd, strand)
+
+			if err != nil {
+				return nil, err
+			}
+
 			currentGene = &genome.GenomicFeature{Id: gid,
-				Location:   dna.NewStrandedLocation(chr, geneStart, geneEnd, strand),
+				Location:   location,
 				Feature:    genome.GeneLevel,
 				GeneSymbol: geneSymbol,
 				GeneId:     geneId,
@@ -757,11 +746,18 @@ func RowsToRecords(rows *sql.Rows, levels genome.Feature, canonicalMode bool) ([
 		//if canonical mode only add if transcript is canonical
 		// also only add if we have a current gene
 		// also only add if we don't already have this transcript
-		if strings.Contains(ls, "transcript") &&
+		if strings.Contains(levels, "transcript") &&
 			(currentTranscript == nil || currentTranscript.TranscriptId != transcriptId) &&
 			(!canonicalMode || isCanonical) {
+
+			location, err := dna.NewStrandedLocation(chr, transcriptStart, transcriptEnd, strand)
+
+			if err != nil {
+				return nil, err
+			}
+
 			currentTranscript = &genome.GenomicFeature{Id: gid,
-				Location: dna.NewStrandedLocation(chr, transcriptStart, transcriptEnd, strand),
+				Location: location,
 				//Strand:       strand,
 				Feature:      genome.TranscriptLevel,
 				GeneSymbol:   geneSymbol,
@@ -785,15 +781,21 @@ func RowsToRecords(rows *sql.Rows, levels genome.Feature, canonicalMode bool) ([
 
 		if currentTranscript != nil {
 			currentTranscript.InExon = currentTranscript.InExon || inExon
-			currentTranscript.Label = genome.MakePromLabel(currentExon.InPromoter, currentTranscript.InExon, isIntragenic)
+			currentTranscript.Label = genome.MakePromLabel(currentTranscript.InPromoter, currentTranscript.InExon, isIntragenic)
 		}
 
 		// only add exon if we have a current transcript and it matches
 		// the transcript id
 
-		if strings.Contains(ls, "exon") {
+		if strings.Contains(levels, "exon") {
+			location, err := dna.NewStrandedLocation(chr, exonStart, exonEnd, strand)
+
+			if err != nil {
+				return nil, err
+			}
+
 			currentExon = &genome.GenomicFeature{Id: gid,
-				Location:     dna.NewStrandedLocation(chr, exonStart, exonEnd, strand),
+				Location:     location,
 				Feature:      genome.ExonLevel,
 				GeneSymbol:   geneSymbol,
 				GeneId:       geneId,
@@ -817,23 +819,17 @@ func RowsToRecords(rows *sql.Rows, levels genome.Feature, canonicalMode bool) ([
 		}
 	}
 
-	log.Debug().Msgf("overlap gene row here %v %s", len(ret), levels)
-
-	log.Debug().Msgf("overlap gene row here %v", ret)
-
 	return ret, nil
 }
 
-func RowsToFeatures(location *dna.Location, levels genome.Feature, rows *sql.Rows) (*genome.GenomicFeatures, error) {
-
-	//log.Debug().Msgf("rowsToFeatures %s   %d %d", location.Chr, location.Start, location.End)
+func RowsToFeatures(location *dna.Location, levels string, rows *sql.Rows) (*genome.GenomicFeatures, error) {
 
 	// 10 seems a reasonable guess for the number of features we might see, just
 	// to reduce slice reallocation
 	features, err := RowsToRecords(rows, levels, false)
 
 	if err != nil {
-		log.Debug().Msgf("error converting rows to features %s", err)
+		log.Error().Msgf("error converting rows to features %s", err)
 		return nil, err
 	}
 

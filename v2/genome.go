@@ -297,7 +297,11 @@ func (genedb *V2GeneDB) OverlappingGenes(location *dna.Location,
 			return nil, err //fmt.Errorf("there was an error with the database records")
 		}
 
-		location := dna.NewStrandedLocation(chr, start, end, strand)
+		location, err := dna.NewStrandedLocation(chr, start, end, strand)
+
+		if err != nil {
+			return nil, err
+		}
 
 		switch feature {
 		case genome.GeneLevel:

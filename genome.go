@@ -38,24 +38,23 @@ type (
 	}
 
 	GenomicFeature struct {
-		Location     *dna.Location `json:"loc"`
-		Type         string        `json:"type,omitempty"`
-		Feature      string        `json:"feature"`
-		GeneId       string        `json:"geneId,omitempty"`
-		GeneSymbol   string        `json:"geneSymbol,omitempty"`
-		TranscriptId string        `json:"transcriptId,omitempty"`
-		//TranscriptName string            `json:"transcriptName,omitempty"`
+		Location     *dna.Location     `json:"loc"`
+		Label        string            `json:"label,omitempty"`
+		Type         string            `json:"type,omitempty"`
+		Feature      string            `json:"feature"`
+		GeneId       string            `json:"geneId,omitempty"`
+		GeneSymbol   string            `json:"geneSymbol,omitempty"`
+		TranscriptId string            `json:"transcriptId,omitempty"`
 		ExonId       string            `json:"exonId,omitempty"`
 		Children     []*GenomicFeature `json:"children,omitempty"`
 		ExonNumber   int               `json:"exonNumber,omitempty"`
-		Id           int               `json:"-"`
 		TssDist      int               `json:"tssDist,omitempty"`
+		Id           int               `json:"-"`
 		IsCanonical  bool              `json:"isCanonical"`
 		IsLongest    bool              `json:"isLongest"`
 		InPromoter   bool              `json:"inPromoter"`
 		InExon       bool              `json:"inExon"`
 		IsIntragenic bool              `json:"isIntragenic"`
-		Label        string            `json:"label,omitempty"`
 	}
 
 	GeneDB interface {

@@ -46,7 +46,7 @@ GENES_SQL = """CREATE TABLE genes
     chr TEXT NOT NULL DEFAULT 'chr1',
     start INT NOT NULL DEFAULT 1,
     end INT NOT NULL DEFAULT 1,
-    strand CHAR(1) NOT NULL DEFAULT '+',
+    strand TEXT NOT NULL DEFAULT '+',
     gene_type_id INT NOT NULL,
     FOREIGN KEY (gene_type_id) REFERENCES gene_types(id)
 );"""
@@ -59,8 +59,10 @@ TRANSCRIPTS_SQL = """CREATE TABLE transcripts
     (id INTEGER PRIMARY KEY ASC,
     gene_id INT NOT NULL,
     transcript_id TEXT NOT NULL DEFAULT '',
+    chr TEXT NOT NULL DEFAULT 'chr1',
     start INT NOT NULL DEFAULT 1,
     end INT NOT NULL DEFAULT 1,
+    strand TEXT NOT NULL DEFAULT '+',
     is_canonical INT NOT NULL DEFAULT 0,
     is_longest INT NOT NULL DEFAULT 0,
     transcript_type_id INT NOT NULL,
@@ -73,9 +75,11 @@ EXONS_SQL = """CREATE TABLE exons
     (id INTEGER PRIMARY KEY ASC,
     transcript_id INT NOT NULL,
     exon_id TEXT NOT NULL DEFAULT '',
-    exon_number INT NOT NULL DEFAULT 1,
+    chr TEXT NOT NULL DEFAULT 'chr1',
     start INT NOT NULL DEFAULT 1,
     end INT NOT NULL DEFAULT 1,
+    strand TEXT NOT NULL DEFAULT '+',
+    exon_number INT NOT NULL DEFAULT 1,
     FOREIGN KEY (transcript_id) REFERENCES transcripts(id)
 );"""
 
@@ -250,12 +254,14 @@ for file_desc in files:
                 # record = cursor.lastrowid
             elif level == "transcript":
                 cursor.execute(
-                    "INSERT INTO transcripts (gene_id, transcript_id, start, end, is_canonical, transcript_type_id) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO transcripts (gene_id, transcript_id, chr, start, end, strand, is_canonical, transcript_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         gene_record_id,
                         transcript_id,
+                        chr,
                         start,
                         end,
+                        strand,
                         is_canonical,
                         transcript_type_id,
                     ),
@@ -263,13 +269,15 @@ for file_desc in files:
                 # record = cursor.lastrowid
             elif level == "exon":
                 cursor.execute(
-                    "INSERT INTO exons (transcript_id, exon_id, exon_number, start, end) VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO exons (transcript_id, exon_id, chr, start, end, strand, exon_number) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         transcript_record_id,
                         exon_id,
-                        exon_number,
+                        chr,
                         start,
                         end,
+                        strand,
+                        exon_number,
                     ),
                 )
                 exon_number += 1
@@ -297,7 +305,9 @@ for file_desc in files:
         "CREATE INDEX idx_transcripts_transcript_id ON transcripts(transcript_id);"
     )
     cursor.execute("CREATE INDEX idx_transcripts_gene_id ON transcripts(gene_id);")
-    cursor.execute("CREATE INDEX idx_transcripts_start_end ON transcripts(start, end);")
+    cursor.execute(
+        "CREATE INDEX idx_transcripts_chr_start_end_strand ON transcripts(chr, start, end, strand);"
+    )
     cursor.execute(
         "CREATE INDEX idx_transcripts_is_canonical ON transcripts(is_canonical);"
     )
@@ -311,7 +321,9 @@ for file_desc in files:
 
     cursor.execute("CREATE INDEX idx_exons_exon_id ON exons(exon_id);")
     cursor.execute("CREATE INDEX idx_exons_transcript_id ON exons(transcript_id);")
-    cursor.execute("CREATE INDEX idx_exons_start_end ON exons(start, end);")
+    cursor.execute(
+        "CREATE INDEX idx_exons_chr_start_end_strand ON exons(chr, start, end, strand);"
+    )
 
     cursor.execute(
         f"CREATE TABLE info (id INTEGER PRIMARY KEY ASC, genome TEXT NOT NULL, version TEXT NOT NULL);",
@@ -331,10 +343,10 @@ for file_desc in files:
         WITH max_lengths AS (
             SELECT gene_id,
             transcript_id,
-            ROW_NUMBER() OVER (PARTITION BY gene_id ORDER BY end - start DESC) AS rank
+            ROW_NUMBER() OVER (PARTITION BY gene_id ORDER BY ABS(end - start) DESC) AS rank
             FROM transcripts
         )
-        SELECT * FROM max_lengths
+        SELECT gene_id, transcript_id FROM max_lengths
         WHERE rank = 1
         ORDER BY gene_id, transcript_id;
         """,

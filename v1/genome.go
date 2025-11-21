@@ -59,13 +59,6 @@ const (
 		WHERE g.feature = ?1 AND g.seqname = ?2 AND (g.start <= ?5 AND g.end >= ?4)
 		ORDER BY g.start`
 
-	ClosestGeneSql = StandardGeneFieldsSql +
-		`, ?3 - g.tss as tss_dist
-		FROM gtf AS g
-		WHERE g.feature = ?1 AND g.seqname = ?2
-		ORDER BY ABS(tss_dist)
-		LIMIT ?4`
-
 	TranscriptsPerGene = StandardGeneFieldsSql +
 		`, ?3 - g.tss as tss_dist
 		FROM gtf AS g
@@ -118,7 +111,8 @@ const (
 	// 	ORDER BY tss_dist`
 
 	// search within transcripts and their promoters
-	InGeneAndPromoterSql = `SELECT DISTINCT
+
+	CoreGeneSql = `SELECT DISTINCT
 		g.id, 
 		g.chr,
 		g.start, 
@@ -141,79 +135,81 @@ const (
 			WHEN g.strand = '-' THEN :mid - t.end
 			ELSE :mid - t.start
     	END AS tss_dist,
-		((:start <= t.start + :pad3p) AND (:end >= t.start - :pad5p) AND (g.strand = '+')) OR
-			((:start <= t.end + :pad5p) AND (:end >= t.end - :pad3p) AND (g.strand = '-')) 
+		((:start <= t.start + :prom3p) AND (:end >= t.start - :prom5p) AND (g.strand = '+')) OR
+			((:start <= t.end + :prom5p) AND (:end >= t.end - :prom3p) AND (g.strand = '-')) 
 		AS in_promoter,
-		:start <= e.end AND :end >= e.start AS in_exon
+		:start <= e.end AND :end >= e.start AS in_exon,
+		:start <= t.end AND :end >= t.start AS is_intragenic
 		FROM genes as g
 		JOIN transcripts AS t ON g.id = t.gene_id
 		JOIN exons AS e ON e.transcript_id = t.id
 		JOIN gene_types AS gt ON g.gene_type_id = gt.id
-		JOIN transcript_types AS tt ON t.transcript_type_id = tt.id
-		WHERE g.chr = :chr AND 
+		JOIN transcript_types AS tt ON t.transcript_type_id = tt.id`
+
+	InGeneAndPromoterSql = CoreGeneSql +
+		` WHERE g.chr = :chr AND 
 		(
-			((:start <= t.end) AND (:end >= t.start - :pad5p) AND g.strand = '+') OR
-			((:start <= t.end + :pad5p) AND (:end >= t.start) AND g.strand = '-')
+			((:start <= t.end) AND (:end >= t.start - :prom5p) AND g.strand = '+') OR
+			((:start <= t.end + :prom5p) AND (:end >= t.start) AND g.strand = '-')
 		)
 		ORDER BY g.gene_id, t.transcript_id, e.exon_number`
 
+	ClosestGeneSql = CoreGeneSql +
+		` WHERE 
+			t.transcript_id IN (
+				SELECT DISTINCT t.transcript_id
+				FROM transcripts AS t
+				WHERE 
+					t.chr = :chr AND
+					t.is_longest = 1
+				ORDER BY ABS(
+					CASE 
+						WHEN t.strand ='-' THEN :mid - t.end
+						ELSE :mid - t.start
+					END
+				)
+				LIMIT :n			
+			) AND
+			t.is_longest = 1
+		ORDER BY ABS(tss_dist)`
+
 	// when annotating genes, see if position falls within an exon
-	InExonSql = `SELECT DISTINCT
-		g.id, 
-		g.chr,
-		e.start, 
-		e.end, 
-		g.strand, 
-		g.gene_id, 
-		g.gene_symbol,
-		gt.name as gene_type,
-		t.transcript_id,
-		t.is_canonical,
-		t.is_longest,
-		tt.name as transcript_type,
-		e.exon_id,
-		e.exon_number,
-		CASE
-			WHEN strand = '-' THEN ?2 - t.end
-			ELSE ?2 - t.start
-    	END AS tss_dist
-		FROM genes as g
-		JOIN transcripts AS t ON g.id = t.gene_id
-		JOIN exons AS e ON e.transcript_id = t.id
-		JOIN gene_types AS gt ON g.gene_type_id = gt.id
-		JOIN transcript_types AS tt ON t.transcript_type_id = tt.id
-		WHERE e.transcript_id = ?1 AND (e.start <= ?4 AND e.end >= ?3)
+	InExonSql = CoreGeneSql +
+		` WHERE e.transcript_id = :transcriptId AND (e.start <= :end AND e.end >= :start)
 		ORDER BY e.start, e.end DESC`
 
-	OverlapSql = `SELECT DISTINCT
-		g.id, 
-		g.chr,
-		g.start, 
-		g.end, 
-		g.strand, 
-		g.gene_id, 
-		g.gene_symbol,
-		gt.name as gene_type,
-		t.transcript_id,
-		t.start,
-		t.end,
-		t.is_canonical,
-		t.is_longest,
-		tt.name as transcript_type,
-		e.exon_id,
-		e.start,
-		e.end,
-		e.exon_number,
-		CASE
-			WHEN strand = '-' THEN ?2 - t.end
-			ELSE ?2 - t.start
-    	END AS tss_dist
-		FROM genes as g
-		JOIN transcripts AS t ON g.id = t.gene_id
-		JOIN exons AS e ON e.transcript_id = t.id
-		JOIN gene_types AS gt ON g.gene_type_id = gt.id
-		JOIN transcript_types AS tt ON t.transcript_type_id = tt.id
-		WHERE g.chr = ?1 AND (g.start <= ?3 AND g.end >= ?2)`
+	// OverlapSql = `SELECT DISTINCT
+	// 	g.id,
+	// 	g.chr,
+	// 	g.start,
+	// 	g.end,
+	// 	g.strand,
+	// 	g.gene_id,
+	// 	g.gene_symbol,
+	// 	gt.name as gene_type,
+	// 	t.transcript_id,
+	// 	t.start,
+	// 	t.end,
+	// 	t.is_canonical,
+	// 	t.is_longest,
+	// 	tt.name as transcript_type,
+	// 	e.exon_id,
+	// 	e.start,
+	// 	e.end,
+	// 	e.exon_number,
+	// 	CASE
+	// 		WHEN strand = '-' THEN ?2 - t.end
+	// 		ELSE ?2 - t.start
+	// 	END AS tss_dist
+	// 	FROM genes as g
+	// 	JOIN transcripts AS t ON g.id = t.gene_id
+	// 	JOIN exons AS e ON e.transcript_id = t.id
+	// 	JOIN gene_types AS gt ON g.gene_type_id = gt.id
+	// 	JOIN transcript_types AS tt ON t.transcript_type_id = tt.id
+	// 	WHERE g.chr = ?1 AND (g.start <= ?3 AND g.end >= ?2)`
+
+	OverlapSql = CoreGeneSql +
+		` WHERE t.chr = :chr AND (t.start <= :end AND t.end >= :start)`
 
 	// If start is less x2 and end is greater than x1, it constrains the feature to be overlapping
 	// our location
@@ -319,13 +315,14 @@ func (genedb *V1GeneDB) GeneDBInfo() (*genome.GeneDBInfo, error) {
 
 func (genedb *V1GeneDB) OverlappingGenes(location *dna.Location,
 	level genome.Feature,
+	prom *dna.PromoterRegion,
 	canonicalMode bool,
 	geneTypeFilter string) ([]*genome.GenomicFeature, error) {
 
 	var geneRows *sql.Rows
 	var err error
 
-	sql := OverlapSql
+	query := OverlapSql
 
 	log.Debug().Msgf("canonical mode %v gene type filter %s", canonicalMode, geneTypeFilter)
 
@@ -334,23 +331,29 @@ func (genedb *V1GeneDB) OverlappingGenes(location *dna.Location,
 	//}
 
 	if geneTypeFilter != "" {
-		sql += " AND g.gene_type = ?4" + OverlapOrderBySql
+		query += " AND gene_type = :geneType" + OverlapOrderBySql
 
-		geneRows, err = genedb.db.Query(sql,
-			location.Chr,
-			location.Start,
-			location.End,
-			geneTypeFilter)
+		geneRows, err = genedb.db.Query(query,
+			sql.Named("chr", location.Chr),
+			sql.Named("start", location.Start),
+			sql.Named("end", location.End),
+			sql.Named("mid", location.Mid()),
+			sql.Named("prom5p", prom.Upstream()),
+			sql.Named("prom3p", prom.Downstream()),
+			sql.Named("geneType", geneTypeFilter))
 	} else {
-		sql += OverlapOrderBySql
+		query += OverlapOrderBySql
 
-		geneRows, err = genedb.db.Query(sql,
-			location.Chr,
-			location.Start,
-			location.End)
+		geneRows, err = genedb.db.Query(query,
+			sql.Named("chr", location.Chr),
+			sql.Named("start", location.Start),
+			sql.Named("end", location.End),
+			sql.Named("mid", location.Mid()),
+			sql.Named("prom5p", prom.Upstream()),
+			sql.Named("prom3p", prom.Downstream()))
 	}
 
-	//log.Debug().Msgf("overlapping genes %s", sql)
+	//log.Debug().Msgf("overlapping genes %s", query)
 
 	if err != nil {
 		//log.Debug().Msgf("error querying overlapping gene %s", err)
@@ -376,7 +379,7 @@ func (genedb *V1GeneDB) OverlappingGenes(location *dna.Location,
 	// 	e.exon_id,
 	// 	e.exon_number,
 
-	return RowsToRecords(geneRows, genome.Level(level), canonicalMode)
+	return RowsToRecords(geneRows, level, canonicalMode)
 }
 
 func (genedb *V1GeneDB) SearchForGeneByName(search string,
@@ -405,7 +408,7 @@ func (genedb *V1GeneDB) SearchForGeneByName(search string,
 
 	var sql string
 
-	if level == genome.GeneFeature {
+	if level == genome.GeneLevel {
 		sql = GeneInfoSql
 	} else {
 		sql = TranscriptInfoSql
@@ -491,7 +494,9 @@ func (genedb *V1GeneDB) WithinGenes(location *dna.Location, feature genome.Featu
 	return genome.RowsToFeatures(location, feature, rows)
 }
 
-func (genedb *V1GeneDB) WithinGenesAndPromoter(location *dna.Location, levels genome.Level, pad5p uint, pad3p uint) (*genome.GenomicFeatures, error) {
+func (genedb *V1GeneDB) WithinGenesAndPromoter(location *dna.Location,
+	levels genome.Feature,
+	prom *dna.PromoterRegion) (*genome.GenomicFeatures, error) {
 
 	// rows, err := genedb.withinGeneAndPromStmt.Query(
 	// 	mid,
@@ -506,15 +511,15 @@ func (genedb *V1GeneDB) WithinGenesAndPromoter(location *dna.Location, levels ge
 	// 	pad,
 	// 	location.End)
 
-	//log.Debug().Msgf("within genes and promoter %s %d %d pad5p=%d pad3p=%d %s", location.Chr, location.Start, location.End, pad5p, pad3p, WITHIN_GENE_AND_PROMOTER_SQL)
+	//log.Debug().Msgf("within genes and promoter %s %d %d prom5p=%d prom3p=%d %s", location.Chr, location.Start, location.End, prom5p, prom3p, WITHIN_GENE_AND_PROMOTER_SQL)
 
 	rows, err := genedb.db.Query(InGeneAndPromoterSql,
 		sql.Named("chr", location.Chr),
 		sql.Named("mid", location.Mid()),
 		sql.Named("start", location.Start),
 		sql.Named("end", location.End),
-		sql.Named("pad5p", pad5p),
-		sql.Named("pad3p", pad3p))
+		sql.Named("prom5p", prom.Upstream()),
+		sql.Named("prom3p", prom.Downstream()))
 
 	if err != nil {
 		//log.Debug().Msgf("error querying within gene and promoter %s", err)
@@ -524,7 +529,7 @@ func (genedb *V1GeneDB) WithinGenesAndPromoter(location *dna.Location, levels ge
 	return RowsToFeatures(location, levels, rows)
 }
 
-func (genedb *V1GeneDB) InExon(location *dna.Location, transcriptId string) (*genome.GenomicFeatures, error) {
+func (genedb *V1GeneDB) InExon(location *dna.Location, transcriptId string, prom *dna.PromoterRegion) (*genome.GenomicFeatures, error) {
 
 	// rows, err := genedb.inExonStmt.Query(
 	// 	mid,
@@ -536,20 +541,23 @@ func (genedb *V1GeneDB) InExon(location *dna.Location, transcriptId string) (*ge
 	// 	location.End)
 
 	rows, err := genedb.db.Query(InExonSql,
-		transcriptId,
-		location.Mid(),
-		location.Start,
-		location.End)
+		sql.Named("transcriptId", transcriptId),
+		sql.Named("start", location.Start),
+		sql.Named("end", location.End),
+		sql.Named("mid", location.Mid()),
+		sql.Named("prom5p", prom.Upstream()),
+		sql.Named("prom3p", prom.Downstream()))
 
 	if err != nil {
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
-	return genome.RowsToFeatures(location, genome.ExonFeature, rows)
+	return RowsToFeatures(location, genome.ExonLevel, rows)
 }
 
-func (genedb *V1GeneDB) ClosestGenes(location *dna.Location, closestN uint16) ([]*genome.GenomicFeature, error) {
-	mid := (location.Start + location.End) / 2
+func (genedb *V1GeneDB) ClosestGenes(location *dna.Location,
+	prom *dna.PromoterRegion,
+	closestN uint8) ([]*genome.GenomicFeature, error) {
 
 	// rows, err := genedb.closestGeneStmt.Query(mid,
 	// 	level,
@@ -558,82 +566,93 @@ func (genedb *V1GeneDB) ClosestGenes(location *dna.Location, closestN uint16) ([
 
 	// 	n)
 
-	rows, err := genedb.db.Query(ClosestGeneSql, genome.GeneFeature, location.Chr, mid, closestN)
+	log.Debug().Msgf("closest %s", ClosestGeneSql)
+
+	rows, err := genedb.db.Query(ClosestGeneSql,
+		sql.Named("chr", location.Chr),
+		sql.Named("mid", location.Mid()),
+		sql.Named("start", location.Start),
+		sql.Named("end", location.End),
+		sql.Named("prom5p", prom.Upstream()),
+		sql.Named("prom3p", prom.Downstream()),
+		sql.Named("n", closestN))
 
 	if err != nil {
 		//log.Debug().Msgf("error querying closest gene %s %s ", sql, err)
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
-	genes, err := genome.RowsToRecords(rows)
+	return RowsToRecords(rows, genome.GeneLevel, false)
 
-	if err != nil {
-		return nil, err //fmt.Errorf("there was an error with the database query")
-	}
+	// genes, err := genome.RowsToRecords(rows)
 
-	ids := make([]string, len(genes))
-	for i, gene := range genes {
-		ids[i] = gene.GeneId
-	}
+	// if err != nil {
+	// 	return nil, err //fmt.Errorf("there was an error with the database query")
+	// }
 
-	placeholders := make([]string, len(ids))
-	args := make([]any, len(ids)+1)
+	// ids := make([]string, len(genes))
+	// for i, gene := range genes {
+	// 	ids[i] = gene.GeneId
+	// }
 
-	args[0] = mid
+	// placeholders := make([]string, len(ids))
+	// args := make([]any, len(ids)+1)
 
-	for i, id := range ids {
-		placeholders[i] = fmt.Sprintf("?%d", i+2)
-		args[i+1] = id
-	}
+	// args[0] = mid
 
-	sql := StandardGeneFieldsSql +
-		`, ?1 - g.tss as tss_dist
-		FROM gtf AS g
-		WHERE g.feature = 'transcript'`
+	// for i, id := range ids {
+	// 	placeholders[i] = fmt.Sprintf("?%d", i+2)
+	// 	args[i+1] = id
+	// }
 
-	sql += fmt.Sprintf(" AND g.gene_id IN (%s)", strings.Join(placeholders, ",")) + " ORDER BY g.gene_id, ABS(tss_dist)"
+	// sql := StandardGeneFieldsSql +
+	// 	`, ?1 - g.tss as tss_dist
+	// 	FROM gtf AS g
+	// 	WHERE g.feature = 'transcript'`
 
-	//log.Debug().Msgf("closest transcripts %s", sql)
+	// sql += fmt.Sprintf(" AND g.gene_id IN (%s)", strings.Join(placeholders, ",")) + " ORDER BY g.gene_id, ABS(tss_dist)"
 
-	rows, err = genedb.db.Query(sql, args...)
+	// //log.Debug().Msgf("closest transcripts %s", sql)
 
-	if err != nil {
-		return nil, err //fmt.Errorf("there was an error with the database query")
-	}
+	// rows, err = genedb.db.Query(sql, args...)
 
-	transcripts, err := genome.RowsToRecords(rows)
+	// if err != nil {
+	// 	return nil, err //fmt.Errorf("there was an error with the database query")
+	// }
 
-	if err != nil {
-		return nil, err //fmt.Errorf("there was an error with the database query")
-	}
+	// transcripts, err := genome.RowsToRecords(rows)
 
-	// find the closest transcript per gene
+	// if err != nil {
+	// 	return nil, err //fmt.Errorf("there was an error with the database query")
+	// }
 
-	closesMap := make(map[string]*genome.GenomicFeature)
+	// // find the closest transcript per gene
 
-	for _, feature := range transcripts {
-		existing, ok := closesMap[feature.GeneId]
+	// closesMap := make(map[string]*genome.GenomicFeature)
 
-		if !ok || basemath.AbsInt(feature.TssDist) < basemath.AbsInt(existing.TssDist) {
-			closesMap[feature.GeneId] = feature
-		}
-	}
+	// for _, feature := range transcripts {
+	// 	existing, ok := closesMap[feature.GeneId]
 
-	closest := make([]*genome.GenomicFeature, 0, closestN)
+	// 	if !ok || basemath.AbsInt(feature.TssDist) < basemath.AbsInt(existing.TssDist) {
+	// 		closesMap[feature.GeneId] = feature
+	// 	}
+	// }
 
-	for _, feature := range genes {
+	// closest := make([]*genome.GenomicFeature, 0, closestN)
 
-		transcript, ok := closesMap[feature.GeneId]
+	// for _, feature := range genes {
 
-		if ok {
-			closest = append(closest, transcript)
-		}
-	}
+	// 	transcript, ok := closesMap[feature.GeneId]
 
-	return closest, nil
+	// 	if ok {
+	// 		closest = append(closest, transcript)
+	// 	}
+	// }
+
+	// return closest, nil
 }
 
-func RowsToRecords(rows *sql.Rows, levels genome.Level, canonicalMode bool) ([]*genome.GenomicFeature, error) {
+func RowsToRecords(rows *sql.Rows, levels genome.Feature, canonicalMode bool) ([]*genome.GenomicFeature, error) {
 	var gid uint
 	var chr string
 	var geneStart uint
@@ -660,6 +679,7 @@ func RowsToRecords(rows *sql.Rows, levels genome.Level, canonicalMode bool) ([]*
 
 	var inPromoter bool
 	var inExon bool
+	var isIntragenic bool
 
 	// 10 seems a reasonable guess for the number of features we might see, just
 	// to reduce slice reallocation
@@ -693,6 +713,7 @@ func RowsToRecords(rows *sql.Rows, levels genome.Level, canonicalMode bool) ([]*
 			&tssDist,
 			&inPromoter,
 			&inExon,
+			&isIntragenic,
 		)
 
 		if err != nil {
@@ -710,7 +731,7 @@ func RowsToRecords(rows *sql.Rows, levels genome.Level, canonicalMode bool) ([]*
 		if strings.Contains(ls, "gene") && (currentGene == nil || currentGene.GeneId != geneId) {
 			currentGene = &genome.GenomicFeature{Id: gid,
 				Location:   dna.NewStrandedLocation(chr, geneStart, geneEnd, strand),
-				Feature:    genome.GeneFeature,
+				Feature:    genome.GeneLevel,
 				GeneSymbol: geneSymbol,
 				GeneId:     geneId,
 				//Strand:   strand,
@@ -722,8 +743,15 @@ func RowsToRecords(rows *sql.Rows, levels genome.Level, canonicalMode bool) ([]*
 
 		if currentGene != nil {
 			currentGene.InPromoter = currentGene.InPromoter || inPromoter
+			currentGene.IsCanonical = currentGene.IsCanonical || isCanonical
+			currentGene.IsLongest = currentGene.IsLongest || isLongest
 			currentGene.InExon = currentGene.InExon || inExon
-			currentGene.Label = genome.MakePromLabel(currentGene.InPromoter, currentGene.InExon, true)
+			currentGene.IsIntragenic = currentGene.IsIntragenic || isIntragenic
+			currentGene.Label = genome.MakePromLabel(currentGene.InPromoter, currentGene.InExon, currentGene.IsIntragenic)
+
+			if (basemath.AbsInt(tssDist) < basemath.AbsInt(currentGene.TssDist)) || currentGene.TssDist == 0 {
+				currentGene.TssDist = tssDist
+			}
 		}
 
 		//if canonical mode only add if transcript is canonical
@@ -735,13 +763,15 @@ func RowsToRecords(rows *sql.Rows, levels genome.Level, canonicalMode bool) ([]*
 			currentTranscript = &genome.GenomicFeature{Id: gid,
 				Location: dna.NewStrandedLocation(chr, transcriptStart, transcriptEnd, strand),
 				//Strand:       strand,
-				Feature:      genome.TranscriptFeature,
+				Feature:      genome.TranscriptLevel,
 				GeneSymbol:   geneSymbol,
 				GeneId:       geneId,
 				TranscriptId: transcriptId,
 				IsCanonical:  isCanonical,
 				IsLongest:    isLongest,
 				InPromoter:   inPromoter,
+				IsIntragenic: isIntragenic,
+				TssDist:      tssDist,
 				//InExon:       false,
 				Type:     transcriptType,
 				Children: make([]*genome.GenomicFeature, 0, 10)}
@@ -753,14 +783,10 @@ func RowsToRecords(rows *sql.Rows, levels genome.Level, canonicalMode bool) ([]*
 			}
 		}
 
-		log.Debug().Msgf("1 current gene %v current transcript %v exon %v", currentGene, currentTranscript, currentExon)
-
 		if currentTranscript != nil {
 			currentTranscript.InExon = currentTranscript.InExon || inExon
-			currentTranscript.Label = genome.MakePromLabel(currentTranscript.InPromoter, currentTranscript.InExon, true)
+			currentTranscript.Label = genome.MakePromLabel(currentExon.InPromoter, currentTranscript.InExon, isIntragenic)
 		}
-
-		log.Debug().Msgf("2 current gene %v current transcript %v exon %v", currentGene, currentTranscript, currentExon)
 
 		// only add exon if we have a current transcript and it matches
 		// the transcript id
@@ -768,7 +794,7 @@ func RowsToRecords(rows *sql.Rows, levels genome.Level, canonicalMode bool) ([]*
 		if strings.Contains(ls, "exon") {
 			currentExon = &genome.GenomicFeature{Id: gid,
 				Location:     dna.NewStrandedLocation(chr, exonStart, exonEnd, strand),
-				Feature:      genome.ExonFeature,
+				Feature:      genome.ExonLevel,
 				GeneSymbol:   geneSymbol,
 				GeneId:       geneId,
 				TranscriptId: transcriptId,
@@ -791,12 +817,14 @@ func RowsToRecords(rows *sql.Rows, levels genome.Level, canonicalMode bool) ([]*
 		}
 	}
 
+	log.Debug().Msgf("overlap gene row here %v %s", len(ret), levels)
+
 	log.Debug().Msgf("overlap gene row here %v", ret)
 
 	return ret, nil
 }
 
-func RowsToFeatures(location *dna.Location, levels genome.Level, rows *sql.Rows) (*genome.GenomicFeatures, error) {
+func RowsToFeatures(location *dna.Location, levels genome.Feature, rows *sql.Rows) (*genome.GenomicFeatures, error) {
 
 	//log.Debug().Msgf("rowsToFeatures %s   %d %d", location.Chr, location.Start, location.End)
 

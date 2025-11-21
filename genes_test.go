@@ -20,7 +20,7 @@ func TestWithin(t *testing.T) {
 
 	location := dna.NewLocation("chr3", 187721370, 187733550)
 
-	records, err := db.WithinGenes(location, genome.GeneFeature)
+	records, err := db.WithinGenes(location, genome.GeneLevel)
 
 	if err != nil {
 		fmt.Println(err)
@@ -42,7 +42,7 @@ func TestClosest(t *testing.T) {
 
 	location := dna.NewLocation("chr3", 187721377, 187745725)
 
-	records, err := db.ClosestGenes(location, 10)
+	records, err := db.ClosestGenes(location, dna.DefaultPromoterRegion(), 10)
 
 	if err != nil {
 		fmt.Println(err)

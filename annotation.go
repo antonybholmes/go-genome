@@ -37,7 +37,7 @@ type (
 		// TSSDists     string            `json:"tssDists"`
 		// Locations    string            `json:"geneLocs"`
 		WithinGenes  []*GenomicFeature `json:"withinGenes"`
-		ClosestGenes []*AnnotationGene `json:"closestGenes"`
+		ClosestGenes []*GenomicFeature `json:"closestGenes"`
 	}
 
 	// type ByAbsD []GeneProm
@@ -72,7 +72,7 @@ func NewAnnotateDb(genesdb GeneDB, tssRegion *dna.PromoterRegion, closestN uint8
 	}
 }
 
-func (annotateDb *AnnotateDb) Annotate(location *dna.Location, levels Level) (*GeneAnnotation, error) {
+func (annotateDb *AnnotateDb) Annotate(location *dna.Location, levels Feature) (*GeneAnnotation, error) {
 	//mid := location.Mid()
 
 	// extend search area to account  for promoter
@@ -84,11 +84,12 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location, levels Level) (*G
 
 	//log.Debug().Msgf("Annotating location %s %s", location, annotateDb.GeneDb.File)
 
+	level := GeneLevel
+
 	genesWithin, err := annotateDb.GeneDb.WithinGenesAndPromoter(
 		location,
-		levels,
-		annotateDb.TSSRegion.Offset5P(),
-		annotateDb.TSSRegion.Offset3P(),
+		level,
+		annotateDb.TSSRegion,
 	)
 
 	log.Debug().Msgf("Found %d genes within for location %s", len(genesWithin.Features), location)
@@ -97,6 +98,8 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location, levels Level) (*G
 		log.Error().Msgf("Error within genes for location %s: %v", location, err)
 		return nil, err
 	}
+
+	closestGenes, err := annotateDb.GeneDb.ClosestGenes(location, annotateDb.TSSRegion, annotateDb.ClosestN)
 
 	// we need the unique ids to symbols
 	//idMap := make(map[string]string)
@@ -202,6 +205,8 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location, levels Level) (*G
 	// 	}
 	// }
 
+	log.Debug().Msgf("Found %d closest genes for location %s", len(closestGenes), location)
+
 	annotation := GeneAnnotation{
 		Location: location,
 		// GeneIds:     strings.Join(geneIds, OUTPUT_FEATURE_SEP),
@@ -211,8 +216,8 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location, levels Level) (*G
 
 		// TSSDists:     strings.Join(tssDists, OUTPUT_FEATURE_SEP),
 		// Locations:    strings.Join(featureLocations, OUTPUT_FEATURE_SEP),
-		WithinGenes: genesWithin.Features,
-		//ClosestGenes: closestAnnotations,
+		WithinGenes:  genesWithin.Features,
+		ClosestGenes: closestGenes,
 	}
 
 	return &annotation, nil
@@ -223,7 +228,7 @@ func (annotateDb *AnnotateDb) ClassifyFeature(location *dna.Location, feature *G
 	var start uint
 
 	if feature.Location.Strand == "+" {
-		start = feature.Location.Start - annotateDb.TSSRegion.Offset5P()
+		start = feature.Location.Start - annotateDb.TSSRegion.Upstream()
 	} else {
 		start = feature.Location.Start
 	}
@@ -231,7 +236,7 @@ func (annotateDb *AnnotateDb) ClassifyFeature(location *dna.Location, feature *G
 	var end uint
 
 	if feature.Location.Strand == "-" {
-		end = feature.Location.End + annotateDb.TSSRegion.Offset5P()
+		end = feature.Location.End + annotateDb.TSSRegion.Upstream()
 	} else {
 		end = feature.Location.End
 	}
@@ -240,9 +245,9 @@ func (annotateDb *AnnotateDb) ClassifyFeature(location *dna.Location, feature *G
 	// 	return INTERGENIC
 	// }
 
-	isPromoter := (feature.Location.Strand == "+" && mid >= start && mid <= feature.Location.Start+annotateDb.TSSRegion.Offset3P()) || (feature.Location.Strand == "-" && mid >= feature.Location.End-annotateDb.TSSRegion.Offset3P() && mid <= end)
+	isPromoter := (feature.Location.Strand == "+" && mid >= start && mid <= feature.Location.Start+annotateDb.TSSRegion.Downstream()) || (feature.Location.Strand == "-" && mid >= feature.Location.End-annotateDb.TSSRegion.Downstream() && mid <= end)
 
-	exons, err := annotateDb.GeneDb.InExon(location, feature.TranscriptId)
+	exons, err := annotateDb.GeneDb.InExon(location, feature.TranscriptId, annotateDb.TSSRegion)
 
 	if err != nil {
 		return "", err

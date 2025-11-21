@@ -29,8 +29,8 @@ type (
 		Version string `json:"version"`
 	}
 
+	//Feature string
 	Feature string
-	Level   string
 
 	GeneDBCache struct {
 		cacheMap map[string]GeneDB
@@ -45,16 +45,17 @@ type (
 		GeneSymbol   string        `json:"geneSymbol,omitempty"`
 		TranscriptId string        `json:"transcriptId,omitempty"`
 		//TranscriptName string            `json:"transcriptName,omitempty"`
-		ExonId      string            `json:"exonId,omitempty"`
-		Children    []*GenomicFeature `json:"children,omitempty"`
-		ExonNumber  uint              `json:"exonNumber,omitempty"`
-		Id          uint              `json:"-"`
-		TssDist     int               `json:"tssDist"`
-		IsCanonical bool              `json:"isCanonical"`
-		IsLongest   bool              `json:"isLongest"`
-		InPromoter  bool              `json:"inPromoter"`
-		InExon      bool              `json:"inExon"`
-		Label       string            `json:"label,omitempty"`
+		ExonId       string            `json:"exonId,omitempty"`
+		Children     []*GenomicFeature `json:"children,omitempty"`
+		ExonNumber   uint              `json:"exonNumber,omitempty"`
+		Id           uint              `json:"-"`
+		TssDist      int               `json:"tssDist,omitempty"`
+		IsCanonical  bool              `json:"isCanonical"`
+		IsLongest    bool              `json:"isLongest"`
+		InPromoter   bool              `json:"inPromoter"`
+		InExon       bool              `json:"inExon"`
+		IsIntragenic bool              `json:"isIntragenic"`
+		Label        string            `json:"label,omitempty"`
 	}
 
 	GeneDB interface {
@@ -64,6 +65,7 @@ type (
 
 		OverlappingGenes(location *dna.Location,
 			level Feature,
+			prom *dna.PromoterRegion,
 			canonicalMode bool,
 			geneTypeFilter string) ([]*GenomicFeature, error)
 
@@ -74,13 +76,15 @@ type (
 			geneType string,
 			n uint16) ([]*GenomicFeature, error)
 
-		WithinGenes(location *dna.Location, feature Feature) (*GenomicFeatures, error)
+		WithinGenes(location *dna.Location, level Feature) (*GenomicFeatures, error)
 
-		WithinGenesAndPromoter(location *dna.Location, levels Level, pad5p uint, pad3p uint) (*GenomicFeatures, error)
+		WithinGenesAndPromoter(location *dna.Location, level Feature, prom *dna.PromoterRegion) (*GenomicFeatures, error)
 
-		InExon(location *dna.Location, transcriptId string) (*GenomicFeatures, error)
+		InExon(location *dna.Location, transcriptId string, prom *dna.PromoterRegion) (*GenomicFeatures, error)
 
-		ClosestGenes(location *dna.Location, closestN uint16) ([]*GenomicFeature, error)
+		ClosestGenes(location *dna.Location,
+			prom *dna.PromoterRegion,
+			closestN uint8) ([]*GenomicFeature, error)
 	}
 )
 
@@ -94,21 +98,21 @@ const (
 	//  	WHERE level = 2 AND gene_id = ? AND chr = ? AND ? >= stranded_start - ? AND ? <= stranded_start + ?
 	//  	ORDER BY start ASC`
 
-	GeneFeature       Feature = "gene"
-	TranscriptFeature Feature = "transcript"
-	ExonFeature       Feature = "exon"
+	//GeneFeature       Feature = "gene"
+	//TranscriptFeature Feature = "transcript"
+	//ExonFeature       Feature = "exon"
 
 	// GeneLevel       Level = 1
 	// TranscriptLevel Level = 2
 	// ExonLevel       Level = 3
 
-	AllLevels               Level = "gene,transcript,exon"
-	GeneLevels              Level = "gene"
-	TranscriptLevels        Level = "transcript"
-	ExonLevels              Level = "exon"
-	GeneAndTranscriptLevels Level = "gene,transcript"
-	GeneAndExonLevels       Level = "gene,exon"
-	TranscriptAndExonLevels Level = "transcript,exon"
+	AllLevels               Feature = "gene,transcript,exon"
+	GeneLevel               Feature = "gene"
+	TranscriptLevel         Feature = "transcript"
+	ExonLevel               Feature = "exon"
+	GeneAndTranscriptLevels Feature = "gene,transcript"
+	GeneAndExonLevels       Feature = "gene,exon"
+	TranscriptAndExonLevels Feature = "transcript,exon"
 )
 
 // func (feature *GenomicFeature) ToLocation() *dna.Location {
@@ -235,7 +239,7 @@ func (cache *GeneDBCache) Close() {
 	}
 }
 
-func RowsToFeatures(location *dna.Location, feature Feature, rows *sql.Rows) (*GenomicFeatures, error) {
+func RowsToFeatures(location *dna.Location, level Feature, rows *sql.Rows) (*GenomicFeatures, error) {
 
 	//log.Debug().Msgf("rowsToFeatures %s   %d %d", location.Chr, location.Start, location.End)
 
@@ -247,7 +251,7 @@ func RowsToFeatures(location *dna.Location, feature Feature, rows *sql.Rows) (*G
 		return nil, err
 	}
 
-	ret := GenomicFeatures{Location: location, Feature: feature, Features: features}
+	ret := GenomicFeatures{Location: location, Feature: level, Features: features}
 
 	return &ret, nil
 }
@@ -267,7 +271,7 @@ func RowsToRecords(rows *sql.Rows) ([]*GenomicFeature, error) {
 	defer rows.Close()
 
 	var id uint
-	var feature Feature
+	var level Feature
 	var chr string
 	var start uint
 	var end uint
@@ -299,7 +303,7 @@ func RowsToRecords(rows *sql.Rows) ([]*GenomicFeature, error) {
 		d = 0 // tss distance
 
 		err = rows.Scan(&id,
-			&feature,
+			&level,
 			&chr,
 			&start,
 			&end,
@@ -320,7 +324,7 @@ func RowsToRecords(rows *sql.Rows) ([]*GenomicFeature, error) {
 		location := dna.NewLocation(chr, start, end)
 
 		feature := GenomicFeature{
-			Feature:  feature,
+			Feature:  level,
 			Location: location,
 			//Strand:       strand,
 			GeneId:       geneId,
@@ -380,16 +384,16 @@ func SortFeaturesByPos(features []*GenomicFeature) {
 // 	return features[i].Location.End < features[j].Location.End
 // }
 
-func MaxLevel(levels Level) Feature {
+func MaxLevel(levels Feature) Feature {
 	var level Feature
 
 	switch strings.ToLower(string(levels)) {
 	case "gene", "genes":
-		level = GeneFeature
+		level = GeneLevel
 	case "transcript", "transcripts":
-		level = TranscriptFeature
+		level = TranscriptLevel
 	default:
-		level = GeneFeature
+		level = GeneLevel
 	}
 
 	return level

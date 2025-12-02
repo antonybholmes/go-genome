@@ -8,11 +8,11 @@ replace github.com/antonybholmes/go-dna => ../go-dna
 
 replace github.com/antonybholmes/go-sys => ../go-sys
 
-require github.com/antonybholmes/go-basemath v0.0.0-20251121215600-3269f8a98aeb
+require github.com/antonybholmes/go-basemath v0.0.0-20251201172054-b807a31af9fa
 
-require github.com/antonybholmes/go-dna v0.0.0-20251121215821-87b42eef25c5
+require github.com/antonybholmes/go-dna v0.0.0-20251201172049-608170d85a85
 
-require github.com/antonybholmes/go-sys v0.0.0-20251121215826-41c42c23076e
+require github.com/antonybholmes/go-sys v0.0.0-20251201172055-50c02bde14ef
 
 require (
 	github.com/google/uuid v1.6.0 // indirect

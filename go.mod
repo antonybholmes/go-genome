@@ -10,9 +10,9 @@ replace github.com/antonybholmes/go-sys => ../go-sys
 
 require github.com/antonybholmes/go-basemath v0.0.0-20251211184815-6e7285b975dd
 
-require github.com/antonybholmes/go-dna v0.0.0-20251211184807-2c19ac385efd
+require github.com/antonybholmes/go-dna v0.0.0-20251215211059-b3acf082663a
 
-require github.com/antonybholmes/go-sys v0.0.0-20251211184816-38c1e4f69349
+require github.com/antonybholmes/go-sys v0.0.0-20251215211105-61a3d71011f7
 
 require (
 	github.com/google/uuid v1.6.0 // indirect

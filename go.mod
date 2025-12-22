@@ -12,7 +12,7 @@ replace github.com/antonybholmes/go-web => ../go-web
 
 require github.com/antonybholmes/go-basemath v0.0.0-20251211184815-6e7285b975dd
 
-require github.com/antonybholmes/go-dna v0.0.0-20251215211059-b3acf082663a
+require github.com/antonybholmes/go-dna v0.0.0-20251219174959-949288f128af
 
 require (
 	github.com/antonybholmes/go-math v0.0.0-20251211184815-6e7285b975dd
@@ -56,7 +56,7 @@ require (
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
 	golang.org/x/arch v0.23.0 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
-	golang.org/x/exp v0.0.0-20251209150349-8475f28825e9 // indirect
+	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93 // indirect
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.32.0 // indirect

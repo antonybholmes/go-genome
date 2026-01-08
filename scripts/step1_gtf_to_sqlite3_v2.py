@@ -7,14 +7,15 @@ Created on Thu Jun 26 10:35:40 2014
 @author: Antony Holmes
 """
 
-import sys
 import collections
-import re
-import os
-import pandas as pd
-import numpy as np
 import gzip
+import os
+import re
 import sqlite3
+import sys
+
+import numpy as np
+import pandas as pd
 
 tables = ["genes"]
 
@@ -23,15 +24,15 @@ level_map = {"gene": 1, "transcript": 2, "exon": 3}
 files = [
     [
         ["hg19", "Gencode GRCh37 v48"],
-        "/home/antony/development/gencode.v48lift37.basic.annotation.gtf.gz",
+        "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/gencode/grch37/gencode.v48lift37.basic.annotation.gtf.gz",
     ],
     [
         ["grch38", "Gencode GRCh38 v48"],
-        "/home/antony/development/gencode.v48.basic.annotation.gtf.gz",
+        "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/gencode/grch38/gencode.v48.basic.annotation.gtf.gz",
     ],
     [
         ["mm10", "Gencode mm10 vM25"],
-        "/home/antony/development/gencode.vM25.basic.annotation.gtf.gz",
+        "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/gencode/mm10/gencode.vM25.basic.annotation.gtf.gz",
     ],
 ]
 

@@ -201,19 +201,19 @@ func (genedb *V2GeneDB) Close() error {
 	return genedb.db.Close()
 }
 
-func (genedb *V2GeneDB) GeneDBInfo() (*genome.GeneDBInfo, error) {
-	var id int
-	var g string
-	var version string
+// func (genedb *V2GeneDB) GeneDBInfo() (*genome.GeneDBInfo, error) {
+// 	var id int
+// 	var g string
+// 	var version string
 
-	err := genedb.db.QueryRow(genome.GeneDBInfoSql).Scan(&id, &g, &version)
+// 	err := genedb.db.QueryRow(genome.GeneDBInfoSql).Scan(&id, &g, &version)
 
-	if err != nil {
-		return nil, err //fmt.Errorf("there was an error with the database query")
-	}
+// 	if err != nil {
+// 		return nil, err //fmt.Errorf("there was an error with the database query")
+// 	}
 
-	return &genome.GeneDBInfo{Name: genedb.name, Genome: g, Version: version}, nil
-}
+// 	return &genome.GeneDBInfo{Name: genedb.name, Genome: g, Version: version}, nil
+// }
 
 func (genedb *V2GeneDB) OverlappingGenes(location *dna.Location,
 	level string,

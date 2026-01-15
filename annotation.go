@@ -53,12 +53,13 @@ type (
 )
 
 const (
-	Na         string = "n/a"
-	Promoter   string = "promoter"
-	Exonic     string = "exonic"
-	Intronic   string = "intronic"
-	Intergenic string = "intergenic"
-	Intragenic string = "intragenic"
+	Na string = "n/a"
+
+	PromoterLabel   string = "promoter"
+	ExonicLabel     string = "exonic"
+	IntronicLabel   string = "intronic"
+	IntergenicLabel string = "intergenic"
+	IntragenicLabel string = "intragenic"
 
 	GroupSeparator   string = ","
 	FeatureSeparator string = "|"
@@ -162,26 +163,28 @@ func GeneWithStrandLabel(id string, strand string) string {
 	return fmt.Sprintf("%s:%s", id, strand)
 }
 
+// given what we know about the location relative to the gene, make a promoter label
+// to summarize what this feature is
 func MakePromLabel(isPromoter bool, isExon bool, isIntragenic bool) string {
 	labels := make([]string, 0, 3)
 
 	if isPromoter {
-		labels = append(labels, Promoter)
+		labels = append(labels, PromoterLabel)
 	}
 
 	// favor exonic over intronic
 	if isExon {
-		labels = append(labels, Exonic)
+		labels = append(labels, ExonicLabel)
 	} else {
 		if isIntragenic {
-			labels = append(labels, Intronic)
+			labels = append(labels, IntronicLabel)
 		}
 	}
 
 	if isIntragenic {
-		labels = append(labels, Intragenic)
+		labels = append(labels, IntragenicLabel)
 	} else {
-		labels = append(labels, Intergenic)
+		labels = append(labels, IntergenicLabel)
 	}
 
 	//slices.Sort(labels)

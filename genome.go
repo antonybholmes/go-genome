@@ -2,15 +2,15 @@ package genome
 
 import (
 	"database/sql"
-	"fmt"
+	"os"
 	"slices"
 	"sort"
 	"strings"
 
-	"os"
 	"path/filepath"
 
 	"github.com/antonybholmes/go-dna"
+	"github.com/antonybholmes/go-sys"
 	"github.com/antonybholmes/go-sys/log"
 )
 
@@ -24,24 +24,28 @@ type (
 	}
 
 	GeneDBInfo struct {
-		Name    string `json:"name"`
-		Genome  string `json:"genome"`
-		Version string `json:"version"`
+		Id int `json:"-"`
+		//Name     string `json:"name"`
+		Genome   string `json:"genome"`
+		Assembly string `json:"assembly"`
+		Version  string `json:"version"`
+		File     string `json:"-"`
 	}
 
 	//string string
 	//string string
 
 	GeneDBCache struct {
-		cacheMap map[string]GeneDB
-		dir      string
+		cacheMap  map[string]*GeneDBInfo
+		dir       string
+		dbCreator func(assembly string, dir string) GeneDB
 	}
 
 	GenomicFeature struct {
 		Location     *dna.Location     `json:"loc"`
 		Label        string            `json:"label,omitempty"`
 		Type         string            `json:"type,omitempty"`
-		Feature      string            `json:"feature"`
+		Feature      string            `json:"feature"` // e.g., gene, transcript, exon
 		GeneId       string            `json:"geneId,omitempty"`
 		GeneSymbol   string            `json:"geneSymbol,omitempty"`
 		TranscriptId string            `json:"transcriptId,omitempty"`
@@ -50,15 +54,15 @@ type (
 		ExonNumber   int               `json:"exonNumber,omitempty"`
 		TssDist      int               `json:"tssDist,omitempty"`
 		Id           int               `json:"-"`
-		IsCanonical  bool              `json:"isCanonical"`
-		IsLongest    bool              `json:"isLongest"`
-		InPromoter   bool              `json:"inPromoter"`
-		InExon       bool              `json:"inExon"`
-		IsIntragenic bool              `json:"isIntragenic"`
+		IsCanonical  bool              `json:"isCanonical,omitempty"`
+		IsLongest    bool              `json:"isLongest,omitempty"`
+		InPromoter   bool              `json:"inPromoter,omitempty"`
+		InExon       bool              `json:"inExon,omitempty"`
+		IsIntragenic bool              `json:"isIntragenic,omitempty"`
 	}
 
 	GeneDB interface {
-		GeneDBInfo() (*GeneDBInfo, error)
+		//GeneDBInfo() (*GeneDBInfo, error)
 
 		Close() error
 
@@ -88,7 +92,7 @@ type (
 )
 
 const (
-	GeneDBInfoSql = `SELECT id, genome, version FROM info`
+	GeneDBInfoSql = `SELECT id, genome, assembly, version, file FROM metadata`
 
 	MaxGeneInfoResults int16 = 100
 
@@ -153,8 +157,33 @@ func (feature *GenomicFeature) TSS() (*dna.Location, error) {
 // 	}
 // }
 
+func LoadGeneDBInfo(file string) (*GeneDBInfo, error) {
+
+	db, err := sql.Open(sys.Sqlite3DB, file)
+
+	if err != nil {
+		return nil, err //fmt.Errorf("could not open gene database file %s", file)
+	}
+
+	defer db.Close()
+
+	var info GeneDBInfo
+
+	err = db.QueryRow(GeneDBInfoSql).Scan(&info.Id,
+		&info.Genome,
+		&info.Assembly,
+		&info.Version,
+		&info.File)
+
+	if err != nil {
+		return nil, err //fmt.Errorf("there was an error with the database query")
+	}
+
+	return &info, nil
+}
+
 func NewGeneDBCache(dir string, creator func(assembly string, dir string) GeneDB) *GeneDBCache {
-	cacheMap := make(map[string]GeneDB)
+	cacheMap := make(map[string]*GeneDBInfo)
 
 	files, err := os.ReadDir(dir)
 
@@ -166,19 +195,63 @@ func NewGeneDBCache(dir string, creator func(assembly string, dir string) GeneDB
 
 	log.Debug().Msgf("caching gene databases in %s...", dir)
 
-	cacheMap["hg19"] = creator("hg19", dir)
-	cacheMap["grch38"] = creator("grch38", dir)
-	cacheMap["mm10"] = creator("mm10", dir)
+	//cacheMap["hg19"] = creator("hg19", dir)
+	//cacheMap["grch38"] = creator("grch38", dir)
+	//cacheMap["mm10"] = creator("mm10", dir)
 
 	for _, file := range files {
 		basename := file.Name()
 
-		if strings.Contains(basename, "gtf") && strings.HasSuffix(basename, ".db") {
+		if strings.Contains(basename, "gencode") && strings.HasSuffix(basename, ".db") {
 
 			name := strings.TrimSuffix(basename, filepath.Ext(basename))
-			name = strings.TrimPrefix(name, "gtf_")
 
-			cacheMap[name] = creator(name, dir)
+			path := filepath.Join(dir, basename)
+
+			info, err := LoadGeneDBInfo(path)
+
+			if err != nil {
+				log.Error().Msgf("could not load gene database info from %s: %v", path, err)
+				continue
+			}
+
+			cacheMap[info.Assembly] = info
+
+			if info.Assembly == "grch37" {
+				// clone and change assembly
+				hg19Info := GeneDBInfo{
+					Id:       info.Id,
+					Genome:   info.Genome,
+					Assembly: "hg19",
+					Version:  info.Version,
+					File:     info.File,
+				}
+				cacheMap["hg19"] = &hg19Info
+			}
+
+			if info.Assembly == "grch38" {
+				// clone and change assembly
+				hg38Info := GeneDBInfo{
+					Id:       info.Id,
+					Genome:   info.Genome,
+					Assembly: "hg38",
+					Version:  info.Version,
+					File:     info.File,
+				}
+				cacheMap["hg38"] = &hg38Info
+			}
+
+			if info.Assembly == "grcm38" {
+				// clone and change assembly
+				mm10Info := GeneDBInfo{
+					Id:       info.Id,
+					Genome:   info.Genome,
+					Assembly: "mm10",
+					Version:  info.Version,
+					File:     info.File,
+				}
+				cacheMap["mm10"] = &mm10Info
+			}
 
 			log.Debug().Msgf("found gene database %s %s", name, filepath.Join(dir, basename))
 		}
@@ -186,20 +259,23 @@ func NewGeneDBCache(dir string, creator func(assembly string, dir string) GeneDB
 
 	log.Debug().Msgf("---- end ----")
 
-	return &GeneDBCache{dir: dir, cacheMap: cacheMap}
+	return &GeneDBCache{dir: dir,
+		dbCreator: creator,
+		cacheMap:  cacheMap,
+	}
 }
 
-func (cache *GeneDBCache) GeneDB(assembly string, creator func(assembly string, dir string) GeneDB) (GeneDB, error) {
-	_, ok := cache.cacheMap[assembly]
+func (cache *GeneDBCache) GeneDB(assembly string) (GeneDB, error) {
+	//_, ok := cache.cacheMap[assembly]
 
-	if !ok {
-		//db := NewGeneDB(assembly, filepath.Join(cache.dir, fmt.Sprintf("%s.db", assembly)))
-		db := creator(assembly, filepath.Join(cache.dir, fmt.Sprintf("gtf_%s.db", assembly)))
+	//if !ok {
+	//db := NewGeneDB(assembly, filepath.Join(cache.dir, fmt.Sprintf("%s.db", assembly)))
+	db := cache.dbCreator(assembly, cache.dir) //filepath.Join(cache.dir, fmt.Sprintf("gtf_%s.db", assembly)))
 
-		cache.cacheMap[assembly] = db
-	}
+	//cache.cacheMap[assembly] = db
+	//}
 
-	return cache.cacheMap[assembly], nil
+	return db, nil //cache.cacheMap[assembly], nil
 }
 
 func (cache *GeneDBCache) Dir() string {
@@ -211,7 +287,6 @@ func (cache *GeneDBCache) List() ([]*GeneDBInfo, error) {
 	ids := make([]string, 0, len(cache.cacheMap))
 
 	for id := range cache.cacheMap {
-
 		ids = append(ids, id)
 	}
 
@@ -220,11 +295,7 @@ func (cache *GeneDBCache) List() ([]*GeneDBInfo, error) {
 	infos := make([]*GeneDBInfo, 0, len(ids))
 
 	for _, id := range ids {
-		info, err := cache.cacheMap[id].GeneDBInfo()
-
-		if err != nil {
-			return nil, err
-		}
+		info := cache.cacheMap[id]
 
 		infos = append(infos, info)
 	}
@@ -232,11 +303,11 @@ func (cache *GeneDBCache) List() ([]*GeneDBInfo, error) {
 	return infos, nil
 }
 
-func (cache *GeneDBCache) Close() {
-	for _, db := range cache.cacheMap {
-		db.Close()
-	}
-}
+// func (cache *GeneDBCache) Close() {
+// 	for _, db := range cache.cacheMap {
+// 		db.Close()
+// 	}
+// }
 
 func RowsToFeatures(location *dna.Location, level string, rows *sql.Rows) (*GenomicFeatures, error) {
 

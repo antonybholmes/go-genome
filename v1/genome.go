@@ -38,14 +38,14 @@ const (
 		g.transcript_name,
 		g.exon_number`
 
-	GeneInfoSql = StandardGeneFieldsSql +
-		`, 0 as tss_dist
-		FROM gtf AS g
- 		WHERE g.feature = 'gene' AND (g.gene_name LIKE ?1 OR g.gene_id LIKE ?1)`
+	// GeneInfoSql = StandardGeneFieldsSql +
+	// 	`, 0 as tss_dist
+	// 	FROM gtf AS g
+	// 	WHERE g.feature = 'gene' AND (g.gene_name LIKE :q OR g.gene_id LIKE :q)`
 
 	TranscriptInfoSql = StandardGeneFieldsSql +
 		` FROM gtf AS g
- 		WHERE g.feature = 'transcript' AND (g.gene_name LIKE ?1 OR g.gene_id LIKE ?1 OR g.transcript_id LIKE ?1)`
+ 		WHERE g.feature = 'transcript' AND (g.gene_name LIKE :q OR g.gene_id LIKE :q OR g.transcript_id LIKE :q)`
 
 	// const GENE_INFO_FUZZY_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_name, transcript_id, gene_type, 0 as tss_dist
 	//  	FROM gene
@@ -112,7 +112,7 @@ const (
 
 	// search within transcripts and their promoters
 
-	CoreGeneSql = `SELECT DISTINCT
+	CoreLocationSql = `SELECT DISTINCT
 		g.id, 
 		g.chr,
 		g.start, 
@@ -139,14 +139,51 @@ const (
 			((:start <= t.end + :prom5p) AND (:end >= t.end - :prom3p) AND (g.strand = '-')) 
 		AS in_promoter,
 		:start <= e.end AND :end >= e.start AS in_exon,
-		:start <= t.end AND :end >= t.start AS is_intragenic
+		:start <= t.end AND :end >= t.start AS is_intragenic,
+		0 AS rank
 		FROM genes as g
 		JOIN transcripts AS t ON g.id = t.gene_id
 		JOIN exons AS e ON e.transcript_id = t.id
 		JOIN gene_types AS gt ON g.gene_type_id = gt.id
 		JOIN transcript_types AS tt ON t.transcript_type_id = tt.id`
 
-	InGeneAndPromoterSql = CoreGeneSql +
+	GeneInfoSql = `SELECT *
+		FROM(
+			SELECT DISTINCT
+				g.id, 
+				g.chr,
+				g.start, 
+				g.end, 
+				g.strand, 
+				g.gene_id, 
+				g.gene_symbol,
+				gt.name AS gene_type,
+				t.transcript_id,
+				t.start,
+				t.end,
+				t.is_canonical,
+				t.is_longest,
+				tt.name AS transcript_type,
+				e.exon_id,
+				e.start,
+				e.end,
+				e.exon_number,
+				0 AS tss_dist,
+				FALSE AS in_promoter,
+				FALSE AS in_exon,
+				FALSE AS is_intragenic,
+				ROW_NUMBER() OVER (PARTITION BY g.gene_id ORDER BY g.gene_id) AS rank
+			FROM genes as g
+			JOIN transcripts AS t ON g.id = t.gene_id
+			JOIN exons AS e ON e.transcript_id = t.id
+			JOIN gene_types AS gt ON g.gene_type_id = gt.id
+			JOIN transcript_types AS tt ON t.transcript_type_id = tt.id 
+			WHERE (g.gene_symbol LIKE :q OR g.gene_id LIKE :q) {{whereClause}}
+			ORDER BY g.gene_symbol
+		) g
+		WHERE g.rank < :n`
+
+	InGeneAndPromoterSql = CoreLocationSql +
 		` WHERE g.chr = :chr AND 
 		(
 			((:start <= t.end) AND (:end >= t.start - :prom5p) AND g.strand = '+') OR
@@ -154,20 +191,20 @@ const (
 		)
 		ORDER BY g.gene_id, t.transcript_id, e.exon_number`
 
-	InGeneSql = CoreGeneSql +
+	InGeneSql = CoreLocationSql +
 		` WHERE g.chr = :chr AND (:start <= t.end AND :end >= t.start)`
 
-	ClosestGeneSql = CoreGeneSql +
+	ClosestGeneSql = CoreLocationSql +
 		` WHERE 
 			t.transcript_id IN (
 				SELECT DISTINCT t.transcript_id
 				FROM transcripts AS t
 				WHERE 
-					t.chr = :chr AND
+					g.chr = :chr AND
 					t.is_longest = 1
 				ORDER BY ABS(
 					CASE 
-						WHEN t.strand ='-' THEN :mid - t.end
+						WHEN g.strand ='-' THEN :mid - t.end
 						ELSE :mid - t.start
 					END
 				)
@@ -177,7 +214,7 @@ const (
 		ORDER BY ABS(tss_dist)`
 
 	// when annotating genes, see if position falls within an exon
-	InExonSql = CoreGeneSql +
+	InExonSql = CoreLocationSql +
 		` WHERE e.transcript_id = :transcriptId AND (e.start <= :end AND e.end >= :start)
 		ORDER BY e.start, e.end DESC`
 
@@ -211,8 +248,8 @@ const (
 	// 	JOIN transcript_types AS tt ON t.transcript_type_id = tt.id
 	// 	WHERE g.chr = ?1 AND (g.start <= ?3 AND g.end >= ?2)`
 
-	OverlapSql = CoreGeneSql +
-		` WHERE t.chr = :chr AND (t.start <= :end AND t.end >= :start)`
+	OverlapSql = CoreLocationSql +
+		` WHERE g.chr = :chr AND (t.start <= :end AND t.end >= :start)`
 
 	// If start is less x2 and end is greater than x1, it constrains the feature to be overlapping
 	// our location
@@ -288,6 +325,8 @@ const (
 func NewGeneDB(assembly string, dir string) genome.GeneDB {
 	file := filepath.Join(dir, fmt.Sprintf("%s.db", assembly))
 
+	log.Debug().Msgf("opening gene database %s", file)
+
 	db := sys.Must(sql.Open(sys.Sqlite3DB, file))
 
 	return &V1GeneDB{name: assembly, file: file, db: db} //withinGeneStmt: sys.Must(db.Prepare(WITHIN_GENE_SQL)),
@@ -300,20 +339,6 @@ func NewGeneDB(assembly string, dir string) genome.GeneDB {
 
 func (genedb *V1GeneDB) Close() error {
 	return genedb.db.Close()
-}
-
-func (genedb *V1GeneDB) GeneDBInfo() (*genome.GeneDBInfo, error) {
-	var id int
-	var g string
-	var version string
-
-	err := genedb.db.QueryRow(genome.GeneDBInfoSql).Scan(&id, &g, &version)
-
-	if err != nil {
-		return nil, err //fmt.Errorf("there was an error with the database query")
-	}
-
-	return &genome.GeneDBInfo{Name: genedb.name, Genome: g, Version: version}, nil
 }
 
 func (genedb *V1GeneDB) OverlappingGenes(location *dna.Location,
@@ -391,6 +416,9 @@ func (genedb *V1GeneDB) SearchForGeneByName(search string,
 	n int16) ([]*genome.GenomicFeature, error) {
 	n = max(1, min(n, genome.MaxGeneInfoResults))
 
+	log.Debug().Msgf("SearchForGeneByName for gene %s level %s fuzzy %v canonical %v geneType %s n %d",
+		search, level, fuzzy, canonical, geneType, n)
+
 	// case insensitive search
 	search = strings.ToLower(search)
 
@@ -405,59 +433,69 @@ func (genedb *V1GeneDB) SearchForGeneByName(search string,
 		search += "%"
 	}
 
-	var sql string
+	sqlStmt := GeneInfoSql
 
-	if level == genome.GeneLevel {
-		sql = GeneInfoSql
-	} else {
-		sql = TranscriptInfoSql
-	}
+	// if level == genome.GeneLevel {
+	// 	sqlStmt = GeneInfoSql
+	// } else {
+	// 	sqlStmt = TranscriptInfoSql
+	// }
 
 	if canonical {
-		sql += " AND t.is_canonical = 1"
+		sqlStmt = strings.Replace(sqlStmt, "{{whereClause}}", "AND t.is_canonical = 1", 1)
+	} else {
+		sqlStmt = strings.Replace(sqlStmt, "{{whereClause}}", "", 1)
 	}
+
+	log.Debug().Msgf("SQL: %s %s %d", sqlStmt, search, n)
+
+	rows, err = genedb.db.Query(sqlStmt, sql.Named("q", search),
+		sql.Named("n", n))
 
 	//orderSql := " ORDER BY g.seqname, g.start, g.end, g.gene_name, g.transcript_id, g.exon_number"
 
-	if geneType != "" {
-		ids := strings.Split(strings.ToLower(geneType), ",")
+	// if geneType != "" {
+	// 	ids := strings.Split(strings.ToLower(geneType), ",")
 
-		for i := range ids {
-			ids[i] = strings.TrimSpace(ids[i])
-		}
+	// 	for i := range ids {
+	// 		ids[i] = strings.TrimSpace(ids[i])
+	// 	}
 
-		placeholders := make([]string, len(ids))
-		args := make([]any, len(ids)+2)
+	// 	placeholders := make([]string, len(ids))
+	// 	args := make([]any, len(ids)+2)
 
-		args[0] = search
-		args[1] = n
+	// 	args[0] = sql.Named("q", search)
+	// 	args[1] = sql.Named("n", n)
 
-		for i, id := range ids {
-			placeholders[i] = fmt.Sprintf("?%d", i+3)
-			args[i+2] = id
-		}
+	// 	for i, id := range ids {
+	// 		placeholders[i] = fmt.Sprintf(":p%d", i+1)
+	// 		args[i+2] = sql.Named(fmt.Sprintf("p%d", i+1), id)
+	// 	}
 
-		sql += fmt.Sprintf(" AND gene_type IN (%s)", strings.Join(placeholders, ",")) + " LIMIT ?2"
+	// 	sqlStmt += fmt.Sprintf(" AND gene_type IN (%s)", strings.Join(placeholders, ",")) + " LIMIT :n"
 
-		rows, err = genedb.db.Query(sql, args...)
-	} else {
-		sql += " LIMIT ?2"
+	// 	rows, err = genedb.db.Query(sqlStmt, args...)
+	// } else {
+	// 	sqlStmt += " LIMIT :n"
 
-		rows, err = genedb.db.Query(sql, search, n)
-	}
+	// 	rows, err = genedb.db.Query(sqlStmt, sql.Named("q", search), sql.Named("n", n))
+	// }
 
 	if err != nil {
+		log.Debug().Msgf("error querying gene by name %s", err)
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
-	ret, err := genome.RowsToRecords(rows)
+	defer rows.Close()
+
+	ret, err := RowsToRecords(rows, level, canonical)
 
 	if err != nil {
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
 	// put in order of position
-	genome.SortFeaturesByPos(ret)
+	//genome.SortFeaturesByPos(ret)
 
 	return ret, nil
 }
@@ -485,6 +523,8 @@ func (genedb *V1GeneDB) WithinGenes(location *dna.Location, feature string,
 	if err != nil {
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
+
+	defer rows.Close()
 
 	return RowsToFeatures(location, feature, rows)
 }
@@ -518,6 +558,8 @@ func (genedb *V1GeneDB) WithinGenesAndPromoter(location *dna.Location,
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
+	defer rows.Close()
+
 	return RowsToRecords(rows, levels, false)
 }
 
@@ -543,6 +585,8 @@ func (genedb *V1GeneDB) InExon(location *dna.Location, transcriptId string, prom
 	if err != nil {
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
+
+	defer rows.Close()
 
 	return RowsToRecords(rows, genome.ExonLevel, false)
 }
@@ -570,6 +614,8 @@ func (genedb *V1GeneDB) ClosestGenes(location *dna.Location,
 	if err != nil {
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
+
+	defer rows.Close()
 
 	return RowsToRecords(rows, genome.GeneLevel, false)
 
@@ -668,6 +714,8 @@ func RowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*genome
 	var inExon bool
 	var isIntragenic bool
 
+	var rank int
+
 	// 10 seems a reasonable guess for the number of features we might see, just
 	// to reduce slice reallocation
 
@@ -701,6 +749,7 @@ func RowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*genome
 			&inPromoter,
 			&inExon,
 			&isIntragenic,
+			&rank,
 		)
 
 		if err != nil {
@@ -730,6 +779,8 @@ func RowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*genome
 			ret = append(ret, currentGene)
 		}
 
+		// gene inherits properties from transcripts and these become true
+		// if any transcript has them true
 		if currentGene != nil {
 			currentGene.InPromoter = currentGene.InPromoter || inPromoter
 			currentGene.IsCanonical = currentGene.IsCanonical || isCanonical
@@ -756,6 +807,7 @@ func RowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*genome
 				return nil, err
 			}
 
+			// set the properties that will not change for a transcript
 			currentTranscript = &genome.GenomicFeature{Id: gid,
 				Location: location,
 				//Strand:       strand,
@@ -768,9 +820,8 @@ func RowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*genome
 				InPromoter:   inPromoter,
 				IsIntragenic: isIntragenic,
 				TssDist:      tssDist,
-				//InExon:       false,
-				Type:     transcriptType,
-				Children: make([]*genome.GenomicFeature, 0, 10)}
+				Type:         transcriptType,
+				Children:     make([]*genome.GenomicFeature, 0, 10)}
 
 			if currentGene != nil {
 				currentGene.Children = append(currentGene.Children, currentTranscript)
@@ -780,8 +831,12 @@ func RowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*genome
 		}
 
 		if currentTranscript != nil {
+			// these properties may be updated as we see more rows and we find
+			// we are in an exon
 			currentTranscript.InExon = currentTranscript.InExon || inExon
-			currentTranscript.Label = genome.MakePromLabel(currentTranscript.InPromoter, currentTranscript.InExon, isIntragenic)
+			currentTranscript.Label = genome.MakePromLabel(currentTranscript.InPromoter,
+				currentTranscript.InExon,
+				currentTranscript.IsIntragenic)
 		}
 
 		// only add exon if we have a current transcript and it matches
@@ -804,7 +859,7 @@ func RowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*genome
 				ExonNumber:   exonNumber,
 				//InPromoter:   inPromoter,
 				InExon: inExon,
-				Label:  genome.MakePromLabel(inPromoter, inExon, true),
+				Label:  genome.MakePromLabel(inPromoter, inExon, isIntragenic),
 				//Strand:       strand,
 			}
 
@@ -814,10 +869,13 @@ func RowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*genome
 				// normally add to transcript, but if no transcript, add to gene
 				currentGene.Children = append(currentGene.Children, currentExon)
 			} else {
+				// no gene or transcript, just add to return list
 				ret = append(ret, currentExon)
 			}
 		}
 	}
+
+	log.Debug().Msgf("converted rows to %d features", len(ret))
 
 	return ret, nil
 }

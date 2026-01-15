@@ -50,15 +50,35 @@ const (
 var (
 	ErrLocationCannotBeEmpty = errors.New("location cannot be empty")
 	ErrSearchTooShort        = errors.New("search too short")
+
+	genomeNormMap = map[string]string{
+		"hg19":   "gencode.v48lift37.basic.grch37",
+		"grch37": "gencode.v48lift37.basic.grch37",
+		"hg38":   "gencode.v48.basic.grch38",
+		"grch38": "gencode.v48.basic.grch38",
+		"mm10":   "gencode.vM25.basic.mm10",
+	}
 )
 
 func parseGeneQuery(c *gin.Context) (*GeneQuery, error) {
 
-	assembly := c.Param("assembly")
+	assembly := strings.ToLower(c.Param("assembly"))
 
 	if assembly == "" {
 		return nil, errors.New("assembly cannot be empty")
 	}
+
+	// check if assembly is valid
+	if _, ok := genomeNormMap[assembly]; !ok {
+		return nil, fmt.Errorf("invalid assembly: %s", assembly)
+	}
+
+	// change assembly to normalized form
+	assembly = genomeNormMap[assembly]
+
+	log.Debug().Msgf("using assembly: %s", assembly)
+
+	//dbFile := genomeToFileMap[assembly]
 
 	feature := ParseFeature(c)
 
@@ -177,12 +197,17 @@ func SearchForGeneByNameRoute(c *gin.Context) {
 
 	canonical := strings.HasPrefix(strings.ToLower(c.Query("canonical")), "t")
 
+	log.Debug().Msgf("searching for gene: %s, fuzzy: %v, canonical: %v, type: %s",
+		search, fuzzyMode, canonical, query.GeneType)
+
 	features, _ := query.Db.SearchForGeneByName(search,
 		query.Feature,
 		fuzzyMode,
 		canonical,
 		c.Query("type"),
 		int16(n))
+
+	log.Debug().Msgf("found %d features", len(features))
 
 	// if err != nil {
 	// 	return web.ErrorReq(err)

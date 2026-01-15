@@ -369,7 +369,7 @@ func (genedb *V2GeneDB) OverlappingGenes(location *dna.Location,
 	return features, nil
 }
 
-func (genedb *V2GeneDB) SearchForGeneByName(search string,
+func (genedb *V2GeneDB) SearchByName(search string,
 	feature string,
 	fuzzy bool,
 	canonical bool,

@@ -200,7 +200,7 @@ func SearchForGeneByNameRoute(c *gin.Context) {
 	log.Debug().Msgf("searching for gene: %s, fuzzy: %v, canonical: %v, type: %s",
 		search, fuzzyMode, canonical, query.GeneType)
 
-	features, _ := query.Db.SearchForGeneByName(search,
+	features, _ := query.Db.SearchByName(search,
 		query.Feature,
 		fuzzyMode,
 		canonical,

@@ -72,7 +72,7 @@ type (
 			canonicalMode bool,
 			geneTypeFilter string) ([]*GenomicFeature, error)
 
-		SearchForGeneByName(search string,
+		SearchByName(search string,
 			level string,
 			fuzzy bool,
 			canonical bool,

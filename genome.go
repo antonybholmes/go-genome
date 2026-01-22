@@ -24,12 +24,11 @@ type (
 	}
 
 	GeneDBInfo struct {
-		Id int `json:"-"`
-		//Name     string `json:"name"`
 		Genome   string `json:"genome"`
 		Assembly string `json:"assembly"`
 		Version  string `json:"version"`
 		File     string `json:"-"`
+		Id       int    `json:"-"`
 	}
 
 	//string string
@@ -37,8 +36,8 @@ type (
 
 	GeneDBCache struct {
 		cacheMap  map[string]*GeneDBInfo
-		dir       string
 		dbCreator func(assembly string, dir string) GeneDB
+		dir       string
 	}
 
 	GenomicFeature struct {

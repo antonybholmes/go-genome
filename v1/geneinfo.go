@@ -25,7 +25,7 @@ const (
 			g.strand, 
 			g.gene_id, 
 			g.gene_symbol,
-			gt.name AS gene_type,
+			gt.name AS gene_type
 	FROM genes as g
 	JOIN gene_types AS gt ON g.gene_type_id = gt.id
 	WHERE (g.gene_symbol LIKE :q OR g.gene_id LIKE :q)
@@ -54,7 +54,7 @@ const (
 			JOIN transcripts AS t ON g.id = t.gene_id
 			JOIN gene_types AS gt ON g.gene_type_id = gt.id
 			JOIN transcript_types AS tt ON t.transcript_type_id = tt.id 
-			WHERE (g.gene_symbol LIKE :q OR g.gene_id LIKE :q) {{whereClause}}
+			WHERE (g.gene_symbol LIKE :q OR g.gene_id LIKE :q OR t.transcript_id LIKE :q) {{whereClause}}
 			ORDER BY g.gene_symbol
 		) g
 		WHERE g.rank < :n`
@@ -86,7 +86,7 @@ const (
 			JOIN exons AS e ON e.transcript_id = t.id
 			JOIN gene_types AS gt ON g.gene_type_id = gt.id
 			JOIN transcript_types AS tt ON t.transcript_type_id = tt.id 
-			WHERE (g.gene_symbol LIKE :q OR g.gene_id LIKE :q) {{whereClause}}
+			WHERE (g.gene_symbol LIKE :q OR g.gene_id LIKE :q OR t.transcript_id LIKE :q OR e.exon_id LIKE :q) {{whereClause}}
 			ORDER BY g.gene_symbol
 		) g
 		WHERE g.rank < :n`
@@ -124,6 +124,7 @@ func (genedb *V1GeneDB) SearchByName(search string,
 			n)
 
 	default:
+		log.Debug().Msgf("searching for genes with term %s", search)
 		return genedb.searchGenes(search, n)
 	}
 

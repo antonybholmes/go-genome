@@ -91,7 +91,7 @@ type (
 )
 
 const (
-	GeneDBInfoSql = `SELECT id, genome, assembly, version, file FROM metadata`
+	GeneDBInfoSql = `SELECT id, genome, assembly, version, file FROM info LIMIT 1`
 
 	MaxGeneInfoResults int16 = 100
 
@@ -158,7 +158,7 @@ func (feature *GenomicFeature) TSS() (*dna.Location, error) {
 
 func LoadGeneDBInfo(file string) (*GeneDBInfo, error) {
 
-	db, err := sql.Open(sys.Sqlite3DB, file)
+	db, err := sql.Open(sys.Sqlite3DB, file+sys.SqliteReadOnlySuffix)
 
 	if err != nil {
 		return nil, err //fmt.Errorf("could not open gene database file %s", file)

@@ -12,7 +12,7 @@ import (
 	"github.com/antonybholmes/go-dna"
 	dnaroutes "github.com/antonybholmes/go-dna/routes"
 	"github.com/antonybholmes/go-genome"
-	"github.com/antonybholmes/go-genome/genomedbcache"
+	"github.com/antonybholmes/go-genome/genomedb"
 	basemath "github.com/antonybholmes/go-math"
 	"github.com/antonybholmes/go-sys/log"
 	"github.com/antonybholmes/go-web"
@@ -60,6 +60,39 @@ var (
 	}
 )
 
+func ParseFeature(c *gin.Context) string {
+
+	feature := web.FormatParam(c.Query("feature")) //ParseFeature(c)
+
+	if feature == "" {
+		feature = genome.AllLevels
+	}
+
+	return feature
+
+	// feature := strings.ToLower(c.Query("feature"))
+
+	// switch {
+	// case strings.Contains(feature, "gene,transcript,exon"):
+	// 	return genome.AllLevels
+	// case strings.Contains(feature, "gene,transcript"):
+	// 	return genome.GeneAndTranscriptLevels
+	// case strings.Contains(feature, "gene,exon"):
+	// 	return genome.GeneAndExonLevels
+	// case strings.Contains(feature, "transcript,exon"):
+	// 	return genome.TranscriptAndExonLevels
+	// case strings.Contains(feature, "gene"):
+	// 	return genome.GeneLevel
+	// case strings.Contains(feature, "transcript"):
+	// 	return genome.TranscriptLevel
+	// case strings.Contains(feature, "exon"):
+	// 	return genome.ExonLevel
+	// default:
+	// 	return genome.AllLevels
+	// }
+
+}
+
 func parseGeneQuery(c *gin.Context) (*GeneQuery, error) {
 
 	assembly := web.FormatParam(c.Param("assembly"))
@@ -97,7 +130,7 @@ func parseGeneQuery(c *gin.Context) (*GeneQuery, error) {
 
 	promoterRegion := ParsePromoterRegion(c)
 
-	db, err := genomedbcache.GeneDB(assembly)
+	db, err := genomedb.GeneDB(assembly)
 
 	if err != nil {
 		return nil, fmt.Errorf("unable to open database for assembly %s %s", assembly, err)
@@ -130,7 +163,7 @@ func parseGeneQuery(c *gin.Context) (*GeneQuery, error) {
 // }
 
 func GenomesRoute(c *gin.Context) {
-	infos, err := genomedbcache.GetInstance().List()
+	infos, err := genomedb.GetInstance().List()
 
 	if err != nil {
 		c.Error(err)
@@ -160,6 +193,8 @@ func OverlappingGenesRoute(c *gin.Context) {
 	}
 
 	ret := make([]*GenesResp, 0, len(locations))
+
+	log.Debug().Msgf("querying for %d locations ", len(locations))
 
 	for _, location := range locations {
 		features, err := query.Db.OverlappingGenes(location,
@@ -294,31 +329,6 @@ func ParseGeneType(c *gin.Context) string {
 		return "protein_coding"
 	default:
 		return ""
-	}
-
-}
-
-func ParseFeature(c *gin.Context) string {
-
-	feature := strings.ToLower(c.Query("feature"))
-
-	switch {
-	case strings.Contains(feature, "gene,transcript,exon"):
-		return genome.AllLevels
-	case strings.Contains(feature, "gene,transcript"):
-		return genome.GeneAndTranscriptLevels
-	case strings.Contains(feature, "gene,exon"):
-		return genome.GeneAndExonLevels
-	case strings.Contains(feature, "transcript,exon"):
-		return genome.TranscriptAndExonLevels
-	case strings.Contains(feature, "gene"):
-		return genome.GeneLevel
-	case strings.Contains(feature, "transcript"):
-		return genome.TranscriptLevel
-	case strings.Contains(feature, "exon"):
-		return genome.ExonLevel
-	default:
-		return genome.AllLevels
 	}
 
 }

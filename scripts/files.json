@@ -1,0 +1,23 @@
+[
+  {
+    "genome": "Human",
+    "assembly": "grch37",
+    "version": "gencode.v48lift37.basic.grch37",
+    "description": "Gencode GRCh37 v48",
+    "file": "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/gencode/grch37/gencode.v48lift37.basic.annotation.gtf.gz"
+  },
+  {
+    "genome": "Human",
+    "assembly": "grch38",
+    "version": "gencode.v48.basic.grch38",
+    "description": "Gencode GRCh38 v48",
+    "file": "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/gencode/grch38/gencode.v48.basic.annotation.gtf.gz"
+  },
+  {
+    "genome": "Mouse",
+    "assembly": "mm10",
+    "version": "gencode.vM25.basic.mm10",
+    "description": "Gencode mm10 vM25",
+    "file": "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/gencode/mm10/gencode.vM25.basic.annotation.gtf.gz"
+  }
+]

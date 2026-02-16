@@ -120,7 +120,7 @@ const (
 		t.is_canonical,
 		t.is_longest,
 		tt.name AS transcript_type,
-		e.exon_id,
+		ei.name AS exon_id,
 		e.start,
 		e.end,
 		e.exon_number,
@@ -135,7 +135,8 @@ const (
 		:start <= t.end AND :end >= t.start AS is_intragenic
 		FROM genes as g
 		JOIN transcripts AS t ON g.id = t.gene_id
-		JOIN exons AS e ON e.transcript_id = t.id
+		JOIN <<LEVEL>> AS e ON e.transcript_id = t.id
+		join exon_ids AS ei ON e.exon_id = ei.id
 		JOIN gene_types AS gt ON g.gene_type_id = gt.id
 		JOIN transcript_types AS tt ON t.transcript_type_id = tt.id`
 
@@ -205,7 +206,13 @@ const (
 	// 	WHERE g.chr = ?1 AND (g.start <= ?3 AND g.end >= ?2)`
 
 	OverlapSql = CoreLocationSql +
-		` WHERE g.chr = :chr AND (t.start <= :end AND t.end >= :start)`
+		` WHERE 
+			g.chr = :chr AND (t.start <= :end AND t.end >= :start)
+			AND (:geneType = '' OR gene_type = :geneType)
+		ORDER BY 
+			g.gene_id,
+			t.transcript_id,
+			e.exon_number`
 
 	// If start is less x2 and end is greater than x1, it constrains the feature to be overlapping
 	// our location
@@ -274,49 +281,51 @@ const (
 	IdToNameSql = `SELECT name FROM ids WHERE id = ?1`
 )
 
+var (
+	ExonLevelMap = map[string]string{
+		"exon": "exons",
+		"cds":  "cds",
+		"utr":  "utrs",
+	}
+)
+
 // func (feature *GenomicFeature) ToLocation() *dna.Location {
 // 	return dna.NewLocation(feature.Chr, feature.Start, feature.End)
 // }
 
 func (genedb *V1GeneDB) OverlappingGenes(location *dna.Location,
-	level string,
+	levels string,
 	prom *dna.PromoterRegion,
 	canonicalMode bool,
 	geneTypeFilter string) ([]*genome.GenomicFeature, error) {
 
+	log.Debug().Msgf("canonical mode %v gene type filter %s", canonicalMode, geneTypeFilter)
+
 	var geneRows *sql.Rows
 	var err error
 
-	sqlStmt := OverlapSql
+	levelTable := "exons"
 
-	log.Debug().Msgf("canonical mode %v gene type filter %s", canonicalMode, geneTypeFilter)
-
-	//if canonical {
-	//	sql += " AND (g.level = 1 OR g.is_canonical = 1)"
-	//}
-
-	if geneTypeFilter != "" {
-		sqlStmt += " AND gene_type = :geneType" + OverlapOrderBySql
-
-		geneRows, err = genedb.db.Query(sqlStmt,
-			sql.Named("chr", location.Chr()),
-			sql.Named("start", location.Start()),
-			sql.Named("end", location.End()),
-			sql.Named("mid", location.Mid()),
-			sql.Named("prom5p", prom.Upstream()),
-			sql.Named("prom3p", prom.Downstream()),
-			sql.Named("geneType", geneTypeFilter))
+	if strings.Contains(levels, "cds") {
+		levelTable = "cds"
+	} else if strings.Contains(levels, "utr") {
+		levelTable = "utrs"
 	} else {
-		sqlStmt += OverlapOrderBySql
-
-		geneRows, err = genedb.db.Query(sqlStmt,
-			sql.Named("chr", location.Chr()),
-			sql.Named("start", location.Start()),
-			sql.Named("end", location.End()),
-			sql.Named("mid", location.Mid()),
-			sql.Named("prom5p", prom.Upstream()),
-			sql.Named("prom3p", prom.Downstream()))
+		levelTable = "exons"
 	}
+
+	stmt := strings.Replace(OverlapSql, "<<LEVEL>>", levelTable, 1)
+
+	log.Debug().Msgf("querying overlapping genes with sql %s", stmt)
+
+	geneRows, err = genedb.db.Query(stmt,
+		sql.Named("chr", location.Chr()),
+		sql.Named("start", location.Start()),
+		sql.Named("end", location.End()),
+		sql.Named("mid", location.Mid()),
+		sql.Named("prom5p", prom.Upstream()),
+		sql.Named("prom3p", prom.Downstream()),
+		sql.Named("geneType", geneTypeFilter))
 
 	if err != nil {
 		log.Error().Msgf("error querying overlapping gene %s", err)
@@ -342,7 +351,7 @@ func (genedb *V1GeneDB) OverlappingGenes(location *dna.Location,
 	// 	e.exon_id,
 	// 	e.exon_number,
 
-	return rowsToRecords(geneRows, level, canonicalMode)
+	return rowsToRecords(geneRows, levels, canonicalMode)
 }
 
 func (genedb *V1GeneDB) WithinGenes(location *dna.Location, feature string,
@@ -569,6 +578,9 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*genome
 	var ret = make([]*genome.GenomicFeature, 0, 10)
 
 	for rows.Next() {
+
+		log.Debug().Msgf("scanning row for gene %s transcript %s exon %s %s", geneId, transcriptId, exonId, levels)
+
 		//err := geneRows.Scan(&id, &level, &chr, &start, &end, &strand, &geneId, &geneSymbol, &transcriptId, &exonId)
 		err := rows.Scan(&gid,
 			&chr,
@@ -690,16 +702,34 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*genome
 		// only add exon if we have a current transcript and it matches
 		// the transcript id
 
-		if strings.Contains(levels, "exon") {
+		// exons are a bit more complex because they can be tagged as exon, cds, or utr and we want
+		// to capture that information in the feature level. We also want to add the exon
+		// to the transcript if we have a current transcript, but if not, we add it to the gene.
+		// If we don't have a gene, we just add it to the return list.
+		// This is because some databases may not have transcripts and we still want to
+		// capture exon information if it is available.
+		if strings.Contains(levels, "exon") ||
+			strings.Contains(levels, "cds") ||
+			strings.Contains(levels, "utr") {
 			location, err := dna.NewStrandedLocation(chr, exonStart, exonEnd, strand)
 
 			if err != nil {
 				return nil, err
 			}
 
+			level := "exon"
+
+			if strings.Contains(levels, "cds") {
+				level = "cds"
+			} else if strings.Contains(levels, "utr") {
+				level = "utr"
+			} else {
+				level = "exon"
+			}
+
 			currentExon = &genome.GenomicFeature{Id: gid,
 				Location:     location,
-				Feature:      genome.ExonLevel,
+				Feature:      level,
 				GeneSymbol:   geneSymbol,
 				GeneId:       geneId,
 				TranscriptId: transcriptId,

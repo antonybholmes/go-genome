@@ -187,7 +187,7 @@ const (
 func NewGeneDB(assembly string, dir string) genome.GeneDB {
 	file := filepath.Join(dir, fmt.Sprintf("gtf_%s.db", assembly))
 
-	db := sys.Must(sql.Open(sys.Sqlite3DB, file))
+	db := sys.Must(sql.Open(sys.Sqlite3DB, file+sys.SqliteReadOnlySuffix))
 
 	return &V2GeneDB{name: assembly, file: file, db: db} //withinGeneStmt: sys.Must(db.Prepare(WITHIN_GENE_SQL)),
 	//withinGeneAndPromStmt: sys.Must(db.Prepare(WITHIN_GENE_AND_PROMOTER_SQL))

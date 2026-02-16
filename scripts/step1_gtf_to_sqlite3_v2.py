@@ -9,6 +9,7 @@ Created on Thu Jun 26 10:35:40 2014
 
 import collections
 import gzip
+import json
 import os
 import re
 import sqlite3
@@ -16,49 +17,31 @@ import sys
 
 import numpy as np
 import pandas as pd
+import uuid_utils as uuid
 
 tables = ["genes"]
 
 level_map = {"gene": 1, "transcript": 2, "exon": 3}
 
-files = [
-    {
-        "genome": "Human",
-        "assembly": "grch37",
-        "version": "gencode.v48lift37.basic.grch37",
-        "description": "Gencode GRCh37 v48",
-        "file": "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/gencode/grch37/gencode.v48lift37.basic.annotation.gtf.gz",
-    },
-    {
-        "genome": "Human",
-        "assembly": "grch38",
-        "version": "gencode.v48.basic.grch38",
-        "description": "Gencode GRCh38 v48",
-        "file": "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/gencode/grch38/gencode.v48.basic.annotation.gtf.gz",
-    },
-    {
-        "genome": "Mouse",
-        "assembly": "mm10",
-        "version": "gencode.vM25.basic.mm10",
-        "description": "Gencode mm10 vM25",
-        "file": "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/gencode/mm10/gencode.vM25.basic.annotation.gtf.gz",
-    },
-]
+with open("files.json", "r") as f:
+    files = json.load(f)
 
-METADATA_SQL = """CREATE TABLE metadata 
-    (id INTEGER PRIMARY KEY ASC,
+
+INFO_SQL = """CREATE TABLE info (id 
+    INTEGER PRIMARY KEY,
     genome TEXT NOT NULL DEFAULT '',
     assembly TEXT NOT NULL DEFAULT '',
     version TEXT NOT NULL DEFAULT '',
     file TEXT NOT NULL DEFAULT ''
 );"""
 
-GENE_TYPES_SQL = """CREATE TABLE gene_types 
-    (id INTEGER PRIMARY KEY ASC,
-    name TEXT NOT NULL UNIQUE DEFAULT '');"""
+GENE_TYPES_SQL = """CREATE TABLE gene_types (
+    id INTEGER PRIMARY KEY,
+    public_id TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL UNIQUE);"""
 
-GENES_SQL = """CREATE TABLE genes 
-    (id INTEGER PRIMARY KEY ASC,
+GENES_SQL = """CREATE TABLE genes (
+    id INTEGER PRIMARY KEY,
     gene_id TEXT NOT NULL DEFAULT '',
     gene_symbol TEXT NOT NULL DEFAULT '',
     chr TEXT NOT NULL DEFAULT 'chr1',
@@ -69,12 +52,13 @@ GENES_SQL = """CREATE TABLE genes
     FOREIGN KEY (gene_type_id) REFERENCES gene_types(id)
 );"""
 
-TRANSCRIPT_TYPES_SQL = """CREATE TABLE transcript_types 
-    (id INTEGER PRIMARY KEY ASC,
-    name TEXT NOT NULL UNIQUE DEFAULT '');"""
+TRANSCRIPT_TYPES_SQL = """CREATE TABLE transcript_types (
+    id INTEGER PRIMARY KEY,
+    public_id TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL UNIQUE);"""
 
-TRANSCRIPTS_SQL = """CREATE TABLE transcripts 
-    (id INTEGER PRIMARY KEY ASC,
+TRANSCRIPTS_SQL = """CREATE TABLE transcripts (
+    id INTEGER PRIMARY KEY,
     gene_id INT NOT NULL,
     transcript_id TEXT NOT NULL DEFAULT '',
     start INT NOT NULL DEFAULT 1,
@@ -86,22 +70,51 @@ TRANSCRIPTS_SQL = """CREATE TABLE transcripts
     FOREIGN KEY (transcript_type_id) REFERENCES transcript_types(id)
 );"""
 
+# exon ids are stored in a separate table to save space,
+# as they are often repeated across exons, cds and utrs
+EXONS_IDS_SQL = """CREATE TABLE exon_ids (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE
+);"""
 
-EXONS_SQL = """CREATE TABLE exons 
-    (id INTEGER PRIMARY KEY ASC,
+EXONS_SQL = """CREATE TABLE exons (
+    id INTEGER PRIMARY KEY,
     transcript_id INT NOT NULL,
-    exon_id TEXT NOT NULL DEFAULT '',
+    exon_id INTEGER NOT NULL DEFAULT '',
     start INT NOT NULL DEFAULT 1,
     end INT NOT NULL DEFAULT 1,
     exon_number INT NOT NULL DEFAULT 1,
-    FOREIGN KEY (transcript_id) REFERENCES transcripts(id)
+    FOREIGN KEY (transcript_id) REFERENCES transcripts(id),
+    FOREIGN KEY (exon_id) REFERENCES exon_ids(id)
+);"""
+
+CDS_SQL = """CREATE TABLE cds (
+    id INTEGER PRIMARY KEY,
+    transcript_id INT NOT NULL,
+    exon_id INTEGER NOT NULL DEFAULT '',
+    start INT NOT NULL DEFAULT 1,
+    end INT NOT NULL DEFAULT 1,
+    exon_number INT NOT NULL DEFAULT 1,
+    FOREIGN KEY (transcript_id) REFERENCES transcripts(id),
+    FOREIGN KEY (exon_id) REFERENCES exon_ids(id)
+);"""
+
+UTR_SQL = """CREATE TABLE utrs (
+    id INTEGER PRIMARY KEY,
+    transcript_id INT NOT NULL,
+    exon_id INTEGER NOT NULL DEFAULT '',
+    start INT NOT NULL DEFAULT 1,
+    end INT NOT NULL DEFAULT 1,
+    exon_number INT NOT NULL DEFAULT 1,
+    FOREIGN KEY (transcript_id) REFERENCES transcripts(id),
+    FOREIGN KEY (exon_id) REFERENCES exon_ids(id)
 );"""
 
 
 for file_desc in files:
     print(file_desc)
 
-    db = f"../data/modules/genome/{file_desc['version']}.db"
+    db = f"../data/modules/genome/gtf_{file_desc['version']}.db"
     if os.path.exists(db):
         os.remove(db)
 
@@ -111,31 +124,25 @@ for file_desc in files:
 
     cursor.execute("PRAGMA journal_mode = WAL;")
     cursor.execute("PRAGMA foreign_keys = ON;")
-    cursor.execute("BEGIN TRANSACTION;")
 
-    cursor.execute(METADATA_SQL)
+    cursor.execute(INFO_SQL)
     cursor.execute(GENE_TYPES_SQL)
     cursor.execute(TRANSCRIPT_TYPES_SQL)
     cursor.execute(GENES_SQL)
     cursor.execute(TRANSCRIPTS_SQL)
+    cursor.execute(EXONS_IDS_SQL)
     cursor.execute(EXONS_SQL)
-
-    cursor.execute("END TRANSACTION;")
-
-    cursor.execute("BEGIN TRANSACTION;")
+    cursor.execute(CDS_SQL)
+    cursor.execute(UTR_SQL)
 
     cursor.execute(
-        f"INSERT INTO metadata (genome, assembly, version, file) VALUES('{file_desc['genome']}', '{file_desc['assembly']}', '{file_desc['version']}', '{file_desc['file']}');"
+        f"INSERT INTO info (genome, assembly, version, file) VALUES('{file_desc['genome']}', '{file_desc['assembly']}', '{file_desc['version']}', '{file_desc['file']}');"
     )
-
-    cursor.execute("END TRANSACTION;")
-
-    cursor.execute("BEGIN TRANSACTION;")
 
     record = 1
     gene_record_id = 0
     transcript_record_id = 0
-    exon_record_id = 0
+    ##exon_record_id = 0
     parent_record_id = -1
     gene_id = ""
     gene_name = ""
@@ -151,6 +158,7 @@ for file_desc in files:
 
     gene_map = {}
     gene_types = {}
+    exon_ids = {}
     transcript_types = {}
 
     with gzip.open(
@@ -219,6 +227,11 @@ for file_desc in files:
             if matcher:
                 exon_id = re.sub(r"\..+", "", matcher.group(1))
 
+            matcher = re.search(r"exon_number (\d+);", tokens[8])
+
+            if matcher:
+                exon_number = int(matcher.group(1))
+
             if level == "gene":
                 parent_record_id = -1
                 gene_record_id += 1
@@ -227,12 +240,12 @@ for file_desc in files:
             elif level == "transcript":
                 parent_record_id = gene_record_id
                 transcript_record_id += 1
-                exon_number = 0
+                # exon_number = 0
                 transcript_map[transcript_id] = transcript_record_id
-            elif level == "exon":
+            elif level == "exon" or level == "CDS" or level == "UTR":
                 parent_record_id = transcript_record_id
-                exon_record_id += 1
-                exon_number += 1
+                ##exon_record_id += 1
+                # exon_number += 1
             else:
                 pass
 
@@ -259,16 +272,36 @@ for file_desc in files:
             # gene_type = id_map.get(gene_type, 1)
 
             if gene_type not in gene_types:
-                cursor.execute("INSERT INTO gene_types (name) VALUES (?)", (gene_type,))
+                cursor.execute(
+                    "INSERT INTO gene_types (public_id, name) VALUES (?, ?)",
+                    (
+                        str(uuid.uuid7()),
+                        gene_type,
+                    ),
+                )
                 gene_types[gene_type] = len(gene_types) + 1
             gene_type_id = gene_types[gene_type]
 
             if transcript_type not in transcript_types:
                 cursor.execute(
-                    "INSERT INTO transcript_types (name) VALUES (?)", (transcript_type,)
+                    "INSERT INTO transcript_types (public_id, name) VALUES (?, ?)",
+                    (
+                        str(uuid.uuid7()),
+                        transcript_type,
+                    ),
                 )
                 transcript_types[transcript_type] = len(transcript_types) + 1
             transcript_type_id = transcript_types[transcript_type]
+
+            if exon_id not in exon_ids:
+                idx = len(exon_ids) + 1
+                cursor.execute(
+                    "INSERT INTO exon_ids (id, name) VALUES (?, ?)",
+                    (idx, exon_id),
+                )
+                exon_ids[exon_id] = idx
+
+            exon_idx = exon_ids[exon_id]
 
             if level == "gene":
                 cursor.execute(
@@ -301,11 +334,10 @@ for file_desc in files:
                 # record = cursor.lastrowid
             elif level == "exon":
                 cursor.execute(
-                    "INSERT INTO exons (id, transcript_id, exon_id, start, end, exon_number) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO exons (transcript_id, exon_id, start, end, exon_number) VALUES (?, ?, ?, ?, ?)",
                     (
-                        exon_record_id,
                         transcript_map[transcript_id],
-                        exon_id,
+                        exon_idx,
                         start,
                         end,
                         exon_number,
@@ -313,16 +345,34 @@ for file_desc in files:
                 )
 
                 # record = cursor.lastrowid
+            elif level == "CDS":
+                cursor.execute(
+                    "INSERT INTO cds (transcript_id, exon_id, start, end, exon_number) VALUES (?, ?, ?, ?, ?)",
+                    (
+                        transcript_map[transcript_id],
+                        exon_idx,
+                        start,
+                        end,
+                        exon_number,
+                    ),
+                )
+            elif level == "UTR":
+                cursor.execute(
+                    "INSERT INTO utrs (transcript_id, exon_id, start, end, exon_number) VALUES (?, ?, ?, ?, ?)",
+                    (
+                        transcript_map[transcript_id],
+                        exon_idx,
+                        start,
+                        end,
+                        exon_number,
+                    ),
+                )
             else:
                 # print(f"Unknown level: {level}")
                 pass
             # break
 
             record += 1
-
-    cursor.execute("END TRANSACTION;")
-
-    cursor.execute("BEGIN TRANSACTION;")
 
     cursor.execute("CREATE INDEX idx_genes_gene_id ON genes(gene_id);")
     cursor.execute("CREATE INDEX idx_genes_gene_symbol ON genes(gene_symbol);")
@@ -352,8 +402,6 @@ for file_desc in files:
     cursor.execute("CREATE INDEX idx_exons_transcript_id ON exons(transcript_id);")
     cursor.execute("CREATE INDEX idx_exons_start_end ON exons(start, end);")
 
-    cursor.execute("END TRANSACTION;")
-
     # work out who is longest transcript per gene
     print("Finding longest transcripts...")
 
@@ -374,8 +422,6 @@ for file_desc in files:
 
     rows = cursor.fetchall()
 
-    cursor.execute("BEGIN TRANSACTION;")
-
     queries = []
 
     for row in rows:
@@ -386,8 +432,6 @@ for file_desc in files:
         "UPDATE transcripts SET is_longest = 1 WHERE gene_id = :gene_id AND transcript_id = :transcript_id",
         queries,
     )
-
-    cursor.execute("END TRANSACTION;")
 
     print(len(queries), "transcripts to set as longest")
 

@@ -1,4 +1,4 @@
-package genomedbcache
+package genomedb
 
 import (
 	"sync"
@@ -32,4 +32,8 @@ func Dir() string {
 func GeneDB(assembly string) (genome.GeneDB, error) {
 	//return instance.GeneDB(assembly, v2.NewGeneDB)
 	return instance.GeneDB(assembly)
+}
+
+func List() ([]*genome.GeneDBInfo, error) {
+	return instance.List()
 }

@@ -62,7 +62,7 @@ var (
 
 func parseGeneQuery(c *gin.Context) (*GeneQuery, error) {
 
-	assembly := strings.ToLower(c.Param("assembly"))
+	assembly := web.FormatParam(c.Param("assembly"))
 
 	if assembly == "" {
 		return nil, errors.New("assembly cannot be empty")
@@ -162,7 +162,11 @@ func OverlappingGenesRoute(c *gin.Context) {
 	ret := make([]*GenesResp, 0, len(locations))
 
 	for _, location := range locations {
-		features, err := query.Db.OverlappingGenes(location, query.Feature, query.Promoter, query.Canonical, query.GeneType)
+		features, err := query.Db.OverlappingGenes(location,
+			query.Feature,
+			query.Promoter,
+			query.Canonical,
+			query.GeneType)
 
 		if err != nil {
 			c.Error(err)
@@ -177,7 +181,7 @@ func OverlappingGenesRoute(c *gin.Context) {
 }
 
 func SearchForGeneByNameRoute(c *gin.Context) {
-	search := c.Query("search") // dnaroutes.ParseLocationsFromPost(c)
+	search := c.Query("q") // dnaroutes.ParseLocationsFromPost(c)
 
 	if search == "" {
 		web.BadReqResp(c, ErrSearchTooShort)

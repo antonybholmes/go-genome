@@ -676,8 +676,9 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*Genomi
 	var isLongest bool
 
 	var exonId string
-	var exonStart int
-	var exonEnd int
+	var featureType string
+	var featureStart int
+	var featureEnd int
 	var exonNumber int
 
 	var tssDist int
@@ -692,6 +693,7 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*Genomi
 	var currentGene *GenomicFeature
 	var currentTranscript *GenomicFeature
 	var currentExon *GenomicFeature
+	var currentFeature *GenomicFeature
 
 	var ret = make([]*GenomicFeature, 0, 10)
 
@@ -714,9 +716,10 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*Genomi
 			&isLongest,
 			&transcriptType,
 			&exonId,
-			&exonStart,
-			&exonEnd,
 			&exonNumber,
+			&featureType,
+			&featureStart,
+			&featureEnd,
 			&tssDist,
 			&inPromoter,
 			&inExon,
@@ -828,15 +831,15 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*Genomi
 		// This is because some databases may not have transcripts and we still want to
 		// capture exon information if it is available.
 		if strings.Contains(levels, "exon") {
-			location, err := dna.NewStrandedLocation(chr, exonStart, exonEnd, strand)
+			location, err := dna.NewStrandedLocation(chr, featureStart, featureEnd, strand)
 
 			if err != nil {
 				return nil, err
 			}
 
-			currentExon = &GenomicFeature{Id: gid,
+			currentFeature = &GenomicFeature{Id: gid,
 				Location:     location,
-				Feature:      ExonLevel,
+				Feature:      featureType,
 				GeneSymbol:   geneSymbol,
 				GeneId:       geneId,
 				TranscriptId: transcriptId,
@@ -848,18 +851,29 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*Genomi
 				//Strand:       strand,
 			}
 
-			if currentTranscript != nil {
-				if currentTranscript.Exons == nil {
-					currentTranscript.Exons = make([]*GenomicFeature, 0, 10)
-				}
+			switch featureType {
+			case "exon":
+				currentExon = currentFeature
 
-				currentTranscript.Exons = append(currentTranscript.Exons, currentExon)
-			} else if currentGene != nil {
-				// normally add to transcript, but if no transcript, add to gene
-				currentGene.Exons = append(currentGene.Exons, currentExon)
-			} else {
-				// no gene or transcript, just add to return list
-				ret = append(ret, currentExon)
+				if currentTranscript != nil {
+					if currentTranscript.Exons == nil {
+						currentTranscript.Exons = make([]*GenomicFeature, 0, 10)
+					}
+
+					currentTranscript.Exons = append(currentTranscript.Exons, currentExon)
+				} else if currentGene != nil {
+					// normally add to transcript, but if no transcript, add to gene
+					currentGene.Exons = append(currentGene.Exons, currentExon)
+				} else {
+					// no gene or transcript, just add to return list
+					ret = append(ret, currentExon)
+				}
+			case "cds":
+				currentExon.Cds = append(currentExon.Cds, currentFeature)
+			case "utr":
+				currentExon.Utrs = append(currentExon.Utrs, currentFeature)
+			default:
+				log.Warn().Msgf("unknown feature type %s for exon %s", featureType, exonId)
 			}
 		}
 	}

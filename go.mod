@@ -12,11 +12,11 @@ replace github.com/antonybholmes/go-web => ../go-web
 
 require github.com/antonybholmes/go-basemath v0.0.0-20260204001030-d512600734fa
 
-require github.com/antonybholmes/go-dna v0.0.0-20260209231207-c73931d48c05
+require github.com/antonybholmes/go-dna v0.0.0-20260212180504-ca50711b47d7
 
 require (
 	github.com/antonybholmes/go-math v0.0.0-20251211184815-6e7285b975dd
-	github.com/antonybholmes/go-sys v0.0.0-20260209231212-cfd21298d6eb
+	github.com/antonybholmes/go-sys v0.0.0-20260212180605-968a7a2e270d
 	github.com/antonybholmes/go-web v0.0.0-20251215211100-5555b69aa3c0
 	github.com/gin-gonic/gin v1.11.0
 )

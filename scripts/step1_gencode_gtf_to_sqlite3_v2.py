@@ -138,7 +138,10 @@ for file_desc in files:
         f"INSERT INTO feature_types (id, public_id, name) VALUES (2, '{uuid.uuid7()}', 'cds');"
     )
     cursor.execute(
-        f"INSERT INTO feature_types (id, public_id, name) VALUES (3, '{uuid.uuid7()}', 'utr');"
+        f"INSERT INTO feature_types (id, public_id, name) VALUES (3, '{uuid.uuid7()}', 'five_prime_utr');"
+    )
+    cursor.execute(
+        f"INSERT INTO feature_types (id, public_id, name) VALUES (4, '{uuid.uuid7()}', 'three_prime_utr');"
     )
 
     record = 1

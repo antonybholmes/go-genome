@@ -541,14 +541,14 @@ func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*GenomicFeatu
 		}
 
 		if currentTranscript != nil {
-			if currentTranscript.Exons == nil {
-				currentTranscript.Exons = make([]*GenomicFeature, 0, 10)
+			if currentTranscript.Features == nil {
+				currentTranscript.Features = make([]*GenomicFeature, 0, 10)
 			}
 
-			currentTranscript.Exons = append(currentTranscript.Exons, currentExon)
+			currentTranscript.Features = append(currentTranscript.Features, currentExon)
 		} else if currentGene != nil {
 			// normally add to transcript, but if no transcript, add to gene
-			currentGene.Exons = append(currentGene.Exons, currentExon)
+			currentGene.Features = append(currentGene.Features, currentExon)
 		} else {
 			// no gene or transcript, just add to return list
 			ret = append(ret, currentExon)

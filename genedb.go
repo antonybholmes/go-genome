@@ -39,9 +39,9 @@ type (
 		TranscriptId string            `json:"transcriptId,omitempty"`
 		ExonId       string            `json:"exonId,omitempty"`
 		PublicId     string            `json:"id,omitempty"`
-		Cds          []*GenomicFeature `json:"cds,omitempty"`
-		Utrs         []*GenomicFeature `json:"utrs,omitempty"`
-		Exons        []*GenomicFeature `json:"exons,omitempty"`
+		Features     []*GenomicFeature `json:"cds,omitempty"`
+		//Utrs         []*GenomicFeature `json:"utrs,omitempty"`
+		//Exons        []*GenomicFeature `json:"exons,omitempty"`
 		Transcripts  []*GenomicFeature `json:"transcripts,omitempty"`
 		TssDist      int               `json:"tssDist,omitempty"`
 		Id           int               `json:"-"`
@@ -192,11 +192,11 @@ const (
 		t.is_canonical,
 		t.is_longest,
 		tt.name AS transcript_type,
-		e.exon_id,
-		e.exon_number,
 		ft.name AS feature_type,
 		f.start,
 		f.end,
+		e.exon_id,
+		e.exon_number,
 		CASE
 			WHEN g.strand = '-' THEN :mid - t.end
 			ELSE :mid - t.start
@@ -208,9 +208,9 @@ const (
 		:start <= t.end AND :end >= t.start AS is_intragenic
 		FROM genes as g
 		JOIN transcripts AS t ON g.id = t.gene_id
-		JOIN exons AS e ON e.transcript_id = t.id
-		JOIN features AS f ON f.exon_id = e.id
+		JOIN features AS f ON f.transcript_id = t.id
 		JOIN feature_types AS ft ON f.feature_type_id = ft.id
+		JOIN exons AS e ON features.exon_id = e.id
 		JOIN gene_types AS gt ON g.gene_type_id = gt.id
 		JOIN transcript_types AS tt ON t.transcript_type_id = tt.id`
 
@@ -692,7 +692,7 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*Genomi
 
 	var currentGene *GenomicFeature
 	var currentTranscript *GenomicFeature
-	var currentExon *GenomicFeature
+	//var currentExon *GenomicFeature
 	var currentFeature *GenomicFeature
 
 	var ret = make([]*GenomicFeature, 0, 10)
@@ -715,11 +715,11 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*Genomi
 			&isCanonical,
 			&isLongest,
 			&transcriptType,
-			&exonId,
-			&exonNumber,
-			&featureType,
+			&featureType, // are an exon, cds, or utr
 			&featureStart,
 			&featureEnd,
+			&exonId, // tie feature to an exon
+			&exonNumber,
 			&tssDist,
 			&inPromoter,
 			&inExon,
@@ -851,29 +851,18 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*Genomi
 				//Strand:       strand,
 			}
 
-			switch featureType {
-			case "exon":
-				currentExon = currentFeature
-
-				if currentTranscript != nil {
-					if currentTranscript.Exons == nil {
-						currentTranscript.Exons = make([]*GenomicFeature, 0, 10)
-					}
-
-					currentTranscript.Exons = append(currentTranscript.Exons, currentExon)
-				} else if currentGene != nil {
-					// normally add to transcript, but if no transcript, add to gene
-					currentGene.Exons = append(currentGene.Exons, currentExon)
-				} else {
-					// no gene or transcript, just add to return list
-					ret = append(ret, currentExon)
+			if currentTranscript != nil {
+				if currentTranscript.Features == nil {
+					currentTranscript.Features = make([]*GenomicFeature, 0, 10)
 				}
-			case "cds":
-				currentExon.Cds = append(currentExon.Cds, currentFeature)
-			case "utr":
-				currentExon.Utrs = append(currentExon.Utrs, currentFeature)
-			default:
-				log.Warn().Msgf("unknown feature type %s for exon %s", featureType, exonId)
+
+				currentTranscript.Features = append(currentTranscript.Features, currentFeature)
+			} else if currentGene != nil {
+				// normally add to transcript, but if no transcript, add to gene
+				currentGene.Features = append(currentGene.Features, currentFeature)
+			} else {
+				// no gene or transcript, just add to return list
+				ret = append(ret, currentFeature)
 			}
 		}
 	}

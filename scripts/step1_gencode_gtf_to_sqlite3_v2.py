@@ -82,26 +82,38 @@ FEATURE_TYPES_SQL = """CREATE TABLE feature_types (
     public_id TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL UNIQUE);"""
 
+
 EXONS_SQL = """CREATE TABLE exons (
     id INTEGER PRIMARY KEY,
     transcript_id INT NOT NULL,
     exon_id TEXT NOT NULL DEFAULT '',
     exon_number INT NOT NULL DEFAULT 1,
+    UNIQUE(transcript_id, exon_id, exon_number),
     FOREIGN KEY (transcript_id) REFERENCES transcripts(id)
 );"""
 
 FEATURES_SQL = """CREATE TABLE features (
     id INTEGER PRIMARY KEY,
+    transcript_id INT NOT NULL,
     exon_id INTEGER NOT NULL,
     feature_type_id INT NOT NULL,
     start INT NOT NULL DEFAULT 1,
     end INT NOT NULL DEFAULT 1,
+    UNIQUE(transcript_id, exon_id, feature_type_id, start, end),
+    FOREIGN KEY (transcript_id) REFERENCES transcripts(id),
     FOREIGN KEY (exon_id) REFERENCES exons(id),
     FOREIGN KEY (feature_type_id) REFERENCES feature_types(id)
 );"""
 
-
-feature_type_map = {"exon": 1, "CDS": 2, "UTR": 3}
+feature_type_map = {
+    "exon": 1,
+    "CDS": 2,
+    "UTR": 3,
+    "start_codon": 4,
+    "stop_codon": 5,
+    "five_prime_utr": 6,
+    "three_prime_utr": 7,
+}
 
 for file_desc in files:
     print(file_desc)
@@ -138,17 +150,26 @@ for file_desc in files:
         f"INSERT INTO feature_types (id, public_id, name) VALUES (2, '{uuid.uuid7()}', 'cds');"
     )
     cursor.execute(
-        f"INSERT INTO feature_types (id, public_id, name) VALUES (3, '{uuid.uuid7()}', 'five_prime_utr');"
+        f"INSERT INTO feature_types (id, public_id, name) VALUES (3, '{uuid.uuid7()}', 'utr');"
+    )
+
+    cursor.execute(
+        f"INSERT INTO feature_types (id, public_id, name) VALUES (4, '{uuid.uuid7()}', 'start_codon');"
+    )
+
+    cursor.execute(
+        f"INSERT INTO feature_types (id, public_id, name) VALUES (5, '{uuid.uuid7()}', 'stop_codon');"
+    )
+
+    cursor.execute(
+        f"INSERT INTO feature_types (id, public_id, name) VALUES (6, '{uuid.uuid7()}', 'five_prime_utr');"
     )
     cursor.execute(
-        f"INSERT INTO feature_types (id, public_id, name) VALUES (4, '{uuid.uuid7()}', 'three_prime_utr');"
+        f"INSERT INTO feature_types (id, public_id, name) VALUES (7, '{uuid.uuid7()}', 'three_prime_utr');"
     )
 
     record = 1
-    gene_record_id = 0
-    transcript_record_id = 0
-    exon_record_id = 0
-    parent_record_id = -1
+
     gene_id = ""
     gene_name = ""
     gene_type = ""
@@ -163,7 +184,8 @@ for file_desc in files:
 
     gene_map = {}
     gene_types = {}
-    exon_ids = {}
+    exon_map = {}
+    transcript_map = {}
     transcript_types = {}
 
     with gzip.open(
@@ -202,6 +224,9 @@ for file_desc in files:
                 # remove version
                 gene_id = re.sub(r"\..+", "", matcher.group(1))
 
+                if gene_id not in gene_map:
+                    gene_map[gene_id] = len(gene_map) + 1
+
             matcher = re.search(r'gene_name "(.+?)";', tokens[8])
 
             if matcher:
@@ -220,6 +245,9 @@ for file_desc in files:
             if matcher:
                 transcript_id = re.sub(r"\..+", "", matcher.group(1))
 
+                if transcript_id not in transcript_map:
+                    transcript_map[transcript_id] = len(transcript_map) + 1
+
             matcher = re.search(r'transcript_type "(.+?)";', tokens[8])
 
             if matcher:
@@ -227,34 +255,43 @@ for file_desc in files:
                 tags.add(f"transcript_type:{transcript_type}")
 
             # exon
-            matcher = re.search(r'exon_id "(.+?)";', tokens[8])
-
-            if matcher:
-                exon_id = re.sub(r"\..+", "", matcher.group(1))
 
             matcher = re.search(r"exon_number (\d+);", tokens[8])
 
             if matcher:
                 exon_number = int(matcher.group(1))
 
-            if level == "gene":
-                parent_record_id = -1
-                gene_record_id += 1
-                gene_map[gene_id] = gene_record_id
-                transcript_map = {}
-            elif level == "transcript":
-                parent_record_id = gene_record_id
-                transcript_record_id += 1
-                # exon_number = 0
-                transcript_map[transcript_id] = transcript_record_id
-                exon_map = {}
-            elif level == "exon":
-                parent_record_id = transcript_record_id
-                exon_record_id += 1
-                exon_map[exon_number] = exon_record_id
-                # exon_number += 1
-            else:
-                pass
+            matcher = re.search(r'exon_id "(.+?)";', tokens[8])
+
+            if matcher:
+                exon_id = re.sub(r"\..+", "", matcher.group(1))
+
+                if exon_id not in exon_map:
+                    exon_map[exon_id] = len(exon_map) + 1
+
+            if gene_type not in gene_types:
+                gene_types[gene_type] = len(gene_types) + 1
+
+                cursor.execute(
+                    "INSERT INTO gene_types (id, public_id, name) VALUES (?, ?, ?)",
+                    (
+                        gene_types[gene_type],
+                        str(uuid.uuid7()),
+                        gene_type,
+                    ),
+                )
+
+            if transcript_type not in transcript_types:
+                transcript_types[transcript_type] = len(transcript_types) + 1
+
+                cursor.execute(
+                    "INSERT INTO transcript_types (id, public_id, name) VALUES (?, ?, ?)",
+                    (
+                        transcript_types[transcript_type],
+                        str(uuid.uuid7()),
+                        transcript_type,
+                    ),
+                )
 
             chr = tokens[0]
             start = int(tokens[3])
@@ -272,119 +309,61 @@ for file_desc in files:
 
             tag_str = ",".join(sorted(tags))
 
-            # gene_id = id_map.get(gene_id, 1)
-            # gene_name = id_map.get(gene_name, 1)
-            # transcript_id = id_map.get(transcript_id, 1)
-            # exon_id = id_map.get(exon_id, 1)
-            # gene_type = id_map.get(gene_type, 1)
-
-            if gene_type not in gene_types:
-                cursor.execute(
-                    "INSERT INTO gene_types (public_id, name) VALUES (?, ?)",
-                    (
-                        str(uuid.uuid7()),
-                        gene_type,
-                    ),
-                )
-                gene_types[gene_type] = len(gene_types) + 1
-            gene_type_id = gene_types[gene_type]
-
-            if transcript_type not in transcript_types:
-                cursor.execute(
-                    "INSERT INTO transcript_types (public_id, name) VALUES (?, ?)",
-                    (
-                        str(uuid.uuid7()),
-                        transcript_type,
-                    ),
-                )
-                transcript_types[transcript_type] = len(transcript_types) + 1
-            transcript_type_id = transcript_types[transcript_type]
-
-            # if exon_id not in exon_ids:
-            #     idx = len(exon_ids) + 1
-            #     cursor.execute(
-            #         "INSERT INTO exon_ids (id, name) VALUES (?, ?)",
-            #         (idx, exon_id),
-            #     )
-            #     exon_ids[exon_id] = idx
-
-            # exon_idx = exon_ids[exon_id]
-
             if level == "gene":
+
                 cursor.execute(
-                    "INSERT INTO genes (id, gene_id, gene_symbol, chr, start, end, strand, gene_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO genes (id, gene_id, gene_symbol, chr, start, end, strand, gene_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
                     (
-                        gene_record_id,
+                        gene_map[gene_id],
                         gene_id,
                         gene_name,
                         chr,
                         start,
                         end,
                         strand,
-                        gene_type_id,
+                        gene_types[gene_type],
                     ),
                 )
                 # record = cursor.lastrowid
             elif level == "transcript":
+
                 cursor.execute(
-                    "INSERT INTO transcripts (id, gene_id, transcript_id, start, end, is_canonical, transcript_type_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO transcripts (id, gene_id, transcript_id, start, end, is_canonical, transcript_type_id) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
                     (
-                        transcript_record_id,
+                        transcript_map[transcript_id],
                         gene_map[gene_id],
                         transcript_id,
                         start,
                         end,
                         is_canonical,
-                        transcript_type_id,
+                        transcript_types[transcript_type],
                     ),
                 )
                 # record = cursor.lastrowid
-            elif level == "exon":
+            else:
+
                 cursor.execute(
-                    "INSERT INTO exons (id, transcript_id, exon_id, exon_number) VALUES (?, ?, ?, ?)",
+                    "INSERT INTO exons (id, transcript_id, exon_id, exon_number) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
                     (
-                        exon_record_id,
+                        exon_map[exon_id],
                         transcript_map[transcript_id],
                         exon_id,
                         exon_number,
                     ),
                 )
 
-                cursor.execute(
-                    "INSERT INTO features (exon_id, feature_type_id, start, end) VALUES (?, ?, ?, ?)",
-                    (
-                        exon_record_id,
-                        feature_type_map["exon"],
-                        start,
-                        end,
-                    ),
-                )
+                if level in feature_type_map:
 
-                # record = cursor.lastrowid
-            elif level == "CDS":
-                cursor.execute(
-                    "INSERT INTO features (exon_id, feature_type_id, start, end) VALUES (?, ?, ?, ?)",
-                    (
-                        exon_record_id,
-                        feature_type_map["CDS"],
-                        start,
-                        end,
-                    ),
-                )
-            elif level == "UTR":
-                cursor.execute(
-                    "INSERT INTO features (exon_id, feature_type_id, start, end) VALUES (?, ?, ?, ?)",
-                    (
-                        exon_record_id,
-                        feature_type_map["UTR"],
-                        start,
-                        end,
-                    ),
-                )
-            else:
-                # print(f"Unknown level: {level}")
-                pass
-            # break
+                    cursor.execute(
+                        "INSERT INTO features (transcript_id, exon_id, feature_type_id, start, end) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+                        (
+                            transcript_map[transcript_id],
+                            exon_map[exon_id],
+                            feature_type_map[level],
+                            start,
+                            end,
+                        ),
+                    )
 
             record += 1
 

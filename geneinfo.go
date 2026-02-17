@@ -374,11 +374,11 @@ func transcriptsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*Genomi
 			}
 
 			if currentGene != nil {
-				if currentGene.Transcripts == nil {
-					currentGene.Transcripts = make([]*GenomicFeature, 0, 10)
+				if currentGene.Features == nil {
+					currentGene.Features = make([]*GenomicFeature, 0, 10)
 				}
 
-				currentGene.Transcripts = append(currentGene.Transcripts, currentTranscript)
+				currentGene.Features = append(currentGene.Features, currentTranscript)
 			} else {
 				ret = append(ret, currentTranscript)
 			}
@@ -511,11 +511,11 @@ func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*GenomicFeatu
 			}
 
 			if currentGene != nil {
-				if currentGene.Transcripts == nil {
-					currentGene.Transcripts = make([]*GenomicFeature, 0, 10)
+				if currentGene.Features == nil {
+					currentGene.Features = make([]*GenomicFeature, 0, 10)
 				}
 
-				currentGene.Transcripts = append(currentGene.Transcripts, currentTranscript)
+				currentGene.Features = append(currentGene.Features, currentTranscript)
 			} else {
 				ret = append(ret, currentTranscript)
 			}

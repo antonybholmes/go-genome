@@ -39,18 +39,18 @@ type (
 		TranscriptId string            `json:"transcriptId,omitempty"`
 		ExonId       string            `json:"exonId,omitempty"`
 		PublicId     string            `json:"id,omitempty"`
-		Features     []*GenomicFeature `json:"cds,omitempty"`
+		Features     []*GenomicFeature `json:"features,omitempty"`
 		//Utrs         []*GenomicFeature `json:"utrs,omitempty"`
 		//Exons        []*GenomicFeature `json:"exons,omitempty"`
-		Transcripts  []*GenomicFeature `json:"transcripts,omitempty"`
-		TssDist      int               `json:"tssDist,omitempty"`
-		Id           int               `json:"-"`
-		ExonNumber   int               `json:"exonNumber,omitempty"`
-		InPromoter   bool              `json:"inPromoter,omitempty"`
-		InExon       bool              `json:"inExon,omitempty"`
-		IsIntragenic bool              `json:"isIntragenic,omitempty"`
-		IsLongest    bool              `json:"isLongest,omitempty"`
-		IsCanonical  bool              `json:"isCanonical,omitempty"`
+		//Transcripts  []*GenomicFeature `json:"transcripts,omitempty"`
+		TssDist      int  `json:"tssDist,omitempty"`
+		Id           int  `json:"-"`
+		ExonNumber   int  `json:"exonNumber,omitempty"`
+		InPromoter   bool `json:"inPromoter,omitempty"`
+		InExon       bool `json:"inExon,omitempty"`
+		IsIntragenic bool `json:"isIntragenic,omitempty"`
+		IsLongest    bool `json:"isLongest,omitempty"`
+		IsCanonical  bool `json:"isCanonical,omitempty"`
 	}
 
 	GenomicFeatures struct {
@@ -80,7 +80,7 @@ const (
 	// TranscriptLevel Level = 2
 	// ExonLevel       Level = 3
 
-	AllLevels               string = "gene,transcript,exon"
+	AllLevels               string = "gene,transcript,exon,cds,utr"
 	GeneLevel               string = "gene"
 	TranscriptLevel         string = "transcript"
 	ExonLevel               string = "exon"
@@ -204,13 +204,13 @@ const (
 		((:start <= t.start + :prom3p) AND (:end >= t.start - :prom5p) AND (g.strand = '+')) OR
 			((:start <= t.end + :prom5p) AND (:end >= t.end - :prom3p) AND (g.strand = '-')) 
 		AS in_promoter,
-		:start <= e.end AND :end >= e.start AS in_exon,
+		:start <= f.end AND :end >= f.start AS in_exon,
 		:start <= t.end AND :end >= t.start AS is_intragenic
 		FROM genes as g
 		JOIN transcripts AS t ON g.id = t.gene_id
 		JOIN features AS f ON f.transcript_id = t.id
 		JOIN feature_types AS ft ON f.feature_type_id = ft.id
-		JOIN exons AS e ON features.exon_id = e.id
+		JOIN exons AS e ON f.exon_id = e.id
 		JOIN gene_types AS gt ON g.gene_type_id = gt.id
 		JOIN transcript_types AS tt ON t.transcript_type_id = tt.id`
 
@@ -310,7 +310,8 @@ const (
 		ORDER BY 
 			g.gene_id,
 			t.transcript_id,
-			e.exon_number,
+			f.start,
+			f.end,
 			f.feature_type_id`
 
 	// If start is less x2 and end is greater than x1, it constrains the feature to be overlapping
@@ -802,11 +803,11 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*Genomi
 			clear(exonMap)
 
 			if currentGene != nil {
-				if currentGene.Transcripts == nil {
-					currentGene.Transcripts = make([]*GenomicFeature, 0, 10)
+				if currentGene.Features == nil {
+					currentGene.Features = make([]*GenomicFeature, 0, 10)
 				}
 
-				currentGene.Transcripts = append(currentGene.Transcripts, currentTranscript)
+				currentGene.Features = append(currentGene.Features, currentTranscript)
 			} else {
 				ret = append(ret, currentTranscript)
 			}
@@ -830,7 +831,7 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool) ([]*Genomi
 		// If we don't have a gene, we just add it to the return list.
 		// This is because some databases may not have transcripts and we still want to
 		// capture exon information if it is available.
-		if strings.Contains(levels, "exon") {
+		if strings.Contains(levels, featureType) {
 			location, err := dna.NewStrandedLocation(chr, featureStart, featureEnd, strand)
 
 			if err != nil {

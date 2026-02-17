@@ -23,7 +23,7 @@ import (
 type (
 	GeneQuery struct {
 		Feature  string
-		Db       genome.GeneDB
+		Db       *genome.GeneDB
 		Assembly string
 		GeneType string // e.g. "protein_coding", "non_coding", etc.
 		// only show canonical genes

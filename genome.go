@@ -10,111 +10,50 @@ import (
 	"path/filepath"
 
 	"github.com/antonybholmes/go-dna"
+
 	"github.com/antonybholmes/go-sys"
 	"github.com/antonybholmes/go-sys/log"
 )
 
 type (
-	GenomicFeatures struct {
-		Location *dna.Location `json:"location"`
-		//Id       string        `json:"id,omitempty"`
-		//Name     string        `json:"name,omitempty"`
-		Feature  string            `json:"feature"`
-		Features []*GenomicFeature `json:"features"`
-	}
-
-	GeneDBInfo struct {
-		Genome   string `json:"genome"`
-		Assembly string `json:"assembly"`
-		Version  string `json:"version"`
-		File     string `json:"-"`
-		Id       int    `json:"-"`
-	}
 
 	//string string
 	//string string
 
 	GeneDBCache struct {
-		cacheMap  map[string]*GeneDBInfo
-		dbCreator func(assembly string, dir string) GeneDB
-		dir       string
+		cacheMap map[string]*GeneDBInfo
+		//dbCreator func(assembly string, dir string) GeneDB
+		dir string
 	}
 
-	GenomicFeature struct {
-		Location     *dna.Location     `json:"loc"`
-		Label        string            `json:"label,omitempty"`
-		Type         string            `json:"type,omitempty"`
-		Feature      string            `json:"feature"` // e.g., gene, transcript, exon
-		GeneId       string            `json:"geneId,omitempty"`
-		GeneSymbol   string            `json:"geneSymbol,omitempty"`
-		TranscriptId string            `json:"transcriptId,omitempty"`
-		ExonId       string            `json:"exonId,omitempty"`
-		Children     []*GenomicFeature `json:"children,omitempty"`
-		ExonNumber   int               `json:"exonNumber,omitempty"`
-		TssDist      int               `json:"tssDist,omitempty"`
-		Id           int               `json:"-"`
-		IsCanonical  bool              `json:"isCanonical,omitempty"`
-		IsLongest    bool              `json:"isLongest,omitempty"`
-		InPromoter   bool              `json:"inPromoter,omitempty"`
-		InExon       bool              `json:"inExon,omitempty"`
-		IsIntragenic bool              `json:"isIntragenic,omitempty"`
-	}
+	// GeneDB interface {
+	// 	//GeneDBInfo() (*GeneDBInfo, error)
 
-	GeneDB interface {
-		//GeneDBInfo() (*GeneDBInfo, error)
+	// 	Close() error
 
-		Close() error
+	// 	OverlappingGenes(location *dna.Location,
+	// 		level string,
+	// 		prom *dna.PromoterRegion,
+	// 		canonicalMode bool,
+	// 		geneTypeFilter string) ([]*GenomicFeature, error)
 
-		OverlappingGenes(location *dna.Location,
-			level string,
-			prom *dna.PromoterRegion,
-			canonicalMode bool,
-			geneTypeFilter string) ([]*GenomicFeature, error)
+	// 	SearchByName(search string,
+	// 		level string,
+	// 		fuzzy bool,
+	// 		canonical bool,
+	// 		geneType string,
+	// 		n int16) ([]*GenomicFeature, error)
 
-		SearchByName(search string,
-			level string,
-			fuzzy bool,
-			canonical bool,
-			geneType string,
-			n int16) ([]*GenomicFeature, error)
+	// 	WithinGenes(location *dna.Location, level string, prom *dna.PromoterRegion) (*GenomicFeatures, error)
 
-		WithinGenes(location *dna.Location, level string, prom *dna.PromoterRegion) (*GenomicFeatures, error)
+	// 	WithinGenesAndPromoter(location *dna.Location, level string, prom *dna.PromoterRegion) ([]*GenomicFeature, error)
 
-		WithinGenesAndPromoter(location *dna.Location, level string, prom *dna.PromoterRegion) ([]*GenomicFeature, error)
+	// 	InExon(location *dna.Location, transcriptId string, prom *dna.PromoterRegion) ([]*GenomicFeature, error)
 
-		InExon(location *dna.Location, transcriptId string, prom *dna.PromoterRegion) ([]*GenomicFeature, error)
-
-		ClosestGenes(location *dna.Location,
-			prom *dna.PromoterRegion,
-			closestN int8) ([]*GenomicFeature, error)
-	}
-)
-
-const (
-	GeneDBInfoSql = `SELECT id, genome, assembly, version, file FROM info LIMIT 1`
-
-	MaxGeneInfoResults int16 = 100
-
-	// const IN_PROMOTER_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_name, transcript_id, start - ?
-	// 	FROM gene
-	//  	WHERE level = 2 AND gene_id = ? AND chr = ? AND ? >= stranded_start - ? AND ? <= stranded_start + ?
-	//  	ORDER BY start ASC`
-
-	//GeneFeature       string = "gene"
-	//TranscriptFeature string = "transcript"
-	//ExonFeature       string = "exon"
-
-	// GeneLevel       Level = 1
-	// TranscriptLevel Level = 2
-	// ExonLevel       Level = 3
-
-	AllLevels               string = "gene,transcript,exon"
-	GeneLevel               string = "gene"
-	TranscriptLevel         string = "transcript"
-	ExonLevel               string = "exon"
-	GeneAndTranscriptLevels string = "gene,transcript"
-	GeneAndExonLevels       string = "gene,exon"
-	TranscriptAndExonLevels string = "transcript,exon"
+	// 	ClosestGenes(location *dna.Location,
+	// 		prom *dna.PromoterRegion,
+	// 		closestN int8) ([]*GenomicFeature, error)
+	// }
 )
 
 // func (feature *GenomicFeature) ToLocation() *dna.Location {
@@ -181,7 +120,7 @@ func LoadGeneDBInfo(file string) (*GeneDBInfo, error) {
 	return &info, nil
 }
 
-func NewGeneDBCache(dir string, creator func(assembly string, dir string) GeneDB) *GeneDBCache {
+func NewGeneDBCache(dir string) *GeneDBCache {
 	cacheMap := make(map[string]*GeneDBInfo)
 
 	files, err := os.ReadDir(dir)
@@ -259,17 +198,17 @@ func NewGeneDBCache(dir string, creator func(assembly string, dir string) GeneDB
 	log.Debug().Msgf("---- end ----")
 
 	return &GeneDBCache{dir: dir,
-		dbCreator: creator,
-		cacheMap:  cacheMap,
+		//dbCreator: creator,
+		cacheMap: cacheMap,
 	}
 }
 
-func (cache *GeneDBCache) GeneDB(assembly string) (GeneDB, error) {
+func (cache *GeneDBCache) GeneDB(assembly string) (*GeneDB, error) {
 	//_, ok := cache.cacheMap[assembly]
 
 	//if !ok {
 	//db := NewGeneDB(assembly, filepath.Join(cache.dir, fmt.Sprintf("%s.db", assembly)))
-	db := cache.dbCreator(assembly, cache.dir) //filepath.Join(cache.dir, fmt.Sprintf("gtf_%s.db", assembly)))
+	db := NewGeneDB(assembly, cache.dir) //   cache.dbCreator(assembly, cache.dir) //filepath.Join(cache.dir, fmt.Sprintf("gtf_%s.db", assembly)))
 
 	//cache.cacheMap[assembly] = db
 	//}
@@ -331,7 +270,7 @@ func RowsToFeatures(location *dna.Location, level string, rows *sql.Rows) (*Geno
 
 // 	// ignore error as it is not critical
 // 	// if the id is not found, we return "n/a"
-// 	genedb.db.QueryRow(ID_TO_NAME_SQL, id).Scan(&name)
+// 	db.QueryRow(ID_TO_NAME_SQL, id).Scan(&name)
 
 // 	return name
 // }

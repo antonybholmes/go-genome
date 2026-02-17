@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/antonybholmes/go-dna"
+
 	"github.com/antonybholmes/go-sys/log"
 )
 
@@ -46,7 +47,7 @@ type (
 	// func (a ByAbsD) Less(i, j int) bool { return a[i].AbsD < a[j].AbsD }
 
 	AnnotateDb struct {
-		GeneDb    GeneDB
+		GeneDb    *GeneDB
 		TSSRegion *dna.PromoterRegion
 		ClosestN  int8
 	}
@@ -65,7 +66,7 @@ const (
 	FeatureSeparator string = "|"
 )
 
-func NewAnnotateDb(genesdb GeneDB, tssRegion *dna.PromoterRegion, closestN int8) *AnnotateDb {
+func NewAnnotateDb(genesdb *GeneDB, tssRegion *dna.PromoterRegion, closestN int8) *AnnotateDb {
 	return &AnnotateDb{
 		GeneDb:    genesdb,
 		TSSRegion: tssRegion,

@@ -72,44 +72,36 @@ TRANSCRIPTS_SQL = """CREATE TABLE transcripts (
 
 # exon ids are stored in a separate table to save space,
 # as they are often repeated across exons, cds and utrs
-EXONS_IDS_SQL = """CREATE TABLE exon_ids (
+# EXONS_IDS_SQL = """CREATE TABLE exon_ids (
+#     id INTEGER PRIMARY KEY,
+#     name TEXT NOT NULL UNIQUE
+# );"""
+
+FEATURE_TYPES_SQL = """CREATE TABLE feature_types (
     id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE
-);"""
+    public_id TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL UNIQUE);"""
 
 EXONS_SQL = """CREATE TABLE exons (
     id INTEGER PRIMARY KEY,
     transcript_id INT NOT NULL,
-    exon_id INTEGER NOT NULL DEFAULT '',
-    start INT NOT NULL DEFAULT 1,
-    end INT NOT NULL DEFAULT 1,
+    exon_id TEXT NOT NULL DEFAULT '',
     exon_number INT NOT NULL DEFAULT 1,
-    FOREIGN KEY (transcript_id) REFERENCES transcripts(id),
-    FOREIGN KEY (exon_id) REFERENCES exon_ids(id)
+    FOREIGN KEY (transcript_id) REFERENCES transcripts(id)
 );"""
 
-CDS_SQL = """CREATE TABLE cds (
+FEATURES_SQL = """CREATE TABLE features (
     id INTEGER PRIMARY KEY,
-    transcript_id INT NOT NULL,
-    exon_id INTEGER NOT NULL DEFAULT '',
+    exon_id INTEGER NOT NULL,
+    feature_type_id INT NOT NULL,
     start INT NOT NULL DEFAULT 1,
     end INT NOT NULL DEFAULT 1,
-    exon_number INT NOT NULL DEFAULT 1,
-    FOREIGN KEY (transcript_id) REFERENCES transcripts(id),
-    FOREIGN KEY (exon_id) REFERENCES exon_ids(id)
+    FOREIGN KEY (exon_id) REFERENCES exons(id),
+    FOREIGN KEY (feature_type_id) REFERENCES feature_types(id)
 );"""
 
-UTR_SQL = """CREATE TABLE utrs (
-    id INTEGER PRIMARY KEY,
-    transcript_id INT NOT NULL,
-    exon_id INTEGER NOT NULL DEFAULT '',
-    start INT NOT NULL DEFAULT 1,
-    end INT NOT NULL DEFAULT 1,
-    exon_number INT NOT NULL DEFAULT 1,
-    FOREIGN KEY (transcript_id) REFERENCES transcripts(id),
-    FOREIGN KEY (exon_id) REFERENCES exon_ids(id)
-);"""
 
+feature_type_map = {"exon": 1, "CDS": 2, "UTR": 3}
 
 for file_desc in files:
     print(file_desc)
@@ -130,19 +122,29 @@ for file_desc in files:
     cursor.execute(TRANSCRIPT_TYPES_SQL)
     cursor.execute(GENES_SQL)
     cursor.execute(TRANSCRIPTS_SQL)
-    cursor.execute(EXONS_IDS_SQL)
+    # cursor.execute(EXONS_IDS_SQL)
+    cursor.execute(FEATURE_TYPES_SQL)
     cursor.execute(EXONS_SQL)
-    cursor.execute(CDS_SQL)
-    cursor.execute(UTR_SQL)
+    cursor.execute(FEATURES_SQL)
 
     cursor.execute(
         f"INSERT INTO info (genome, assembly, version, file) VALUES('{file_desc['genome']}', '{file_desc['assembly']}', '{file_desc['version']}', '{file_desc['file']}');"
     )
 
+    cursor.execute(
+        f"INSERT INTO feature_types (id, public_id, name) VALUES (1, '{uuid.uuid7()}', 'exon');"
+    )
+    cursor.execute(
+        f"INSERT INTO feature_types (id, public_id, name) VALUES (2, '{uuid.uuid7()}', 'cds');"
+    )
+    cursor.execute(
+        f"INSERT INTO feature_types (id, public_id, name) VALUES (3, '{uuid.uuid7()}', 'utr');"
+    )
+
     record = 1
     gene_record_id = 0
     transcript_record_id = 0
-    ##exon_record_id = 0
+    exon_record_id = 0
     parent_record_id = -1
     gene_id = ""
     gene_name = ""
@@ -242,9 +244,11 @@ for file_desc in files:
                 transcript_record_id += 1
                 # exon_number = 0
                 transcript_map[transcript_id] = transcript_record_id
-            elif level == "exon" or level == "CDS" or level == "UTR":
+                exon_map = {}
+            elif level == "exon":
                 parent_record_id = transcript_record_id
-                ##exon_record_id += 1
+                exon_record_id += 1
+                exon_map[exon_number] = exon_record_id
                 # exon_number += 1
             else:
                 pass
@@ -293,15 +297,15 @@ for file_desc in files:
                 transcript_types[transcript_type] = len(transcript_types) + 1
             transcript_type_id = transcript_types[transcript_type]
 
-            if exon_id not in exon_ids:
-                idx = len(exon_ids) + 1
-                cursor.execute(
-                    "INSERT INTO exon_ids (id, name) VALUES (?, ?)",
-                    (idx, exon_id),
-                )
-                exon_ids[exon_id] = idx
+            # if exon_id not in exon_ids:
+            #     idx = len(exon_ids) + 1
+            #     cursor.execute(
+            #         "INSERT INTO exon_ids (id, name) VALUES (?, ?)",
+            #         (idx, exon_id),
+            #     )
+            #     exon_ids[exon_id] = idx
 
-            exon_idx = exon_ids[exon_id]
+            # exon_idx = exon_ids[exon_id]
 
             if level == "gene":
                 cursor.execute(
@@ -334,37 +338,44 @@ for file_desc in files:
                 # record = cursor.lastrowid
             elif level == "exon":
                 cursor.execute(
-                    "INSERT INTO exons (transcript_id, exon_id, start, end, exon_number) VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO exons (id, transcript_id, exon_id, exon_number) VALUES (?, ?, ?, ?)",
                     (
+                        exon_record_id,
                         transcript_map[transcript_id],
-                        exon_idx,
+                        exon_id,
+                        exon_number,
+                    ),
+                )
+
+                cursor.execute(
+                    "INSERT INTO features (exon_id, feature_type_id, start, end) VALUES (?, ?, ?, ?)",
+                    (
+                        exon_record_id,
+                        feature_type_map["exon"],
                         start,
                         end,
-                        exon_number,
                     ),
                 )
 
                 # record = cursor.lastrowid
             elif level == "CDS":
                 cursor.execute(
-                    "INSERT INTO cds (transcript_id, exon_id, start, end, exon_number) VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO features (exon_id, feature_type_id, start, end) VALUES (?, ?, ?, ?)",
                     (
-                        transcript_map[transcript_id],
-                        exon_idx,
+                        exon_record_id,
+                        feature_type_map["CDS"],
                         start,
                         end,
-                        exon_number,
                     ),
                 )
             elif level == "UTR":
                 cursor.execute(
-                    "INSERT INTO utrs (transcript_id, exon_id, start, end, exon_number) VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO features (exon_id, feature_type_id, start, end) VALUES (?, ?, ?, ?)",
                     (
-                        transcript_map[transcript_id],
-                        exon_idx,
+                        exon_record_id,
+                        feature_type_map["UTR"],
                         start,
                         end,
-                        exon_number,
                     ),
                 )
             else:
@@ -377,15 +388,13 @@ for file_desc in files:
     cursor.execute("CREATE INDEX idx_genes_gene_id ON genes(gene_id);")
     cursor.execute("CREATE INDEX idx_genes_gene_symbol ON genes(gene_symbol);")
     cursor.execute("CREATE INDEX idx_genes_gene_type_id ON genes(gene_type_id);")
-    # cursor.execute("CREATE INDEX idx_genes_tss ON genes(tss);")
-    cursor.execute(
-        "CREATE INDEX idx_genes_chr_start_end_strand ON genes(chr, start, end, strand);"
-    )
-
+    cursor.execute("CREATE INDEX idx_transcripts_gene_id ON transcripts(gene_id);")
     cursor.execute(
         "CREATE INDEX idx_transcripts_transcript_id ON transcripts(transcript_id);"
     )
-    cursor.execute("CREATE INDEX idx_transcripts_gene_id ON transcripts(gene_id);")
+    cursor.execute(
+        "CREATE INDEX idx_transcripts_transcript_type_id ON transcripts(transcript_type_id);"
+    )
     cursor.execute("CREATE INDEX idx_transcripts_start_end ON transcripts(start, end);")
     cursor.execute(
         "CREATE INDEX idx_transcripts_is_canonical ON transcripts(is_canonical);"
@@ -394,13 +403,18 @@ for file_desc in files:
         "CREATE INDEX idx_transcripts_is_longest ON transcripts(is_longest);"
     )
 
+    cursor.execute("CREATE INDEX idx_exons_exon_id ON exons(exon_id);")
+
+    cursor.execute("CREATE INDEX idx_exons_transcript_id ON exons(transcript_id);")
+
     cursor.execute(
-        "CREATE INDEX idx_transcripts_transcript_type_id ON transcripts(transcript_type_id);"
+        "CREATE INDEX idx_features_feature_type_id_start_end ON features(feature_type_id, start, end);"
     )
 
-    cursor.execute("CREATE INDEX idx_exons_exon_id ON exons(exon_id);")
-    cursor.execute("CREATE INDEX idx_exons_transcript_id ON exons(transcript_id);")
-    cursor.execute("CREATE INDEX idx_exons_start_end ON exons(start, end);")
+    # cursor.execute("CREATE INDEX idx_genes_tss ON genes(tss);")
+    cursor.execute(
+        "CREATE INDEX idx_genes_chr_start_end_strand ON genes(chr, start, end, strand);"
+    )
 
     # work out who is longest transcript per gene
     print("Finding longest transcripts...")

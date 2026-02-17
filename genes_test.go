@@ -7,14 +7,13 @@ import (
 
 	"github.com/antonybholmes/go-dna"
 	"github.com/antonybholmes/go-genome"
-	v2 "github.com/antonybholmes/go-genome/v2"
 )
 
 func TestWithin(t *testing.T) {
 	fmt.Println("Within")
 
 	//file := fmt.Sprintf("../data/gene/%s.db", "grch38")
-	db := v2.NewGeneDB("grch38", "../data/gene/")
+	db := genome.NewGeneDB("grch38", "../data/gene/")
 
 	defer db.Close()
 
@@ -41,7 +40,7 @@ func TestClosest(t *testing.T) {
 
 	//file := fmt.Sprintf("../data/gene/%s.db", "grch38")
 
-	db := v2.NewGeneDB("grch38", "../data/gene/")
+	db := genome.NewGeneDB("grch38", "../data/gene/")
 
 	defer db.Close()
 

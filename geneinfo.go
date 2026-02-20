@@ -91,9 +91,7 @@ const (
 
 func (gtfdb *GtfDB) SearchByName(search string,
 	level string,
-	fuzzyMode bool,
 	canonicalMode bool,
-	geneType string,
 	n int16) ([]*GenomicFeature, error) {
 	n = max(1, min(n, MaxGeneInfoResults))
 

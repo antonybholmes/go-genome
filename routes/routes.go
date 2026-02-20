@@ -112,6 +112,8 @@ func parseQuery(c *gin.Context, param string) (*GeneQuery, error) {
 	// // change assembly to normalized form
 	// assembly = genomeNormMap[assembly]
 
+	log.Debug().Msgf("using assembly: %s", id)
+
 	//dbFile := genomeToFileMap[assembly]
 
 	feature := ParseFeature(c)
@@ -204,6 +206,8 @@ func OverlappingGenesRoute(c *gin.Context) {
 
 	ret := make([]*GenesResp, 0, len(locations))
 
+	log.Debug().Msgf("querying for %d locations ", len(locations))
+
 	for _, location := range locations {
 		features, err := query.Db.OverlappingGenes(location,
 			query.Feature,
@@ -224,7 +228,9 @@ func OverlappingGenesRoute(c *gin.Context) {
 	web.MakeDataResp(c, "", &ret)
 }
 
-func SearchForGeneByNameRoute(c *gin.Context) {
+// Search for genes, but slightly slower lookup since assembly must
+// be resolved into a specific database.
+func SearchForGenesByAssemblyRoute(c *gin.Context) {
 	search := c.Query("q") // dnaroutes.ParseLocationsFromPost(c)
 
 	if search == "" {
@@ -232,7 +238,7 @@ func SearchForGeneByNameRoute(c *gin.Context) {
 		return
 	}
 
-	fuzzyMode := c.Query("mode") == "fuzzy"
+	//fuzzyMode := c.Query("mode") == "fuzzy"
 
 	n := web.ParseN(c, 20)
 
@@ -245,20 +251,59 @@ func SearchForGeneByNameRoute(c *gin.Context) {
 
 	canonical := strings.HasPrefix(strings.ToLower(c.Query("canonical")), "t")
 
-	// log.Debug().Msgf("searching for gene: %s, fuzzy: %v, canonical: %v, type: %s",
-	// 	search, fuzzyMode, canonical, query.Biotype)
+	log.Debug().Msgf("searching for gene: %s, canonical: %v, type: %s",
+		search, canonical, query.Biotype)
 
-	features, err := query.Db.SearchByName(search,
+	features, _ := query.Db.SearchByName(search,
 		query.Feature,
-		fuzzyMode,
 		canonical,
-		c.Query("type"),
 		int16(n))
+
+	log.Debug().Msgf("found %d features", len(features))
+
+	// if err != nil {
+	// 	return web.ErrorReq(err)
+	// }
+
+	web.MakeDataResp(c, "", &features)
+}
+
+// Search for genes using a specific gtf database. Preferable
+// as slightly faster lookup.
+func SearchForGenesRoute(c *gin.Context) {
+	search := c.Query("q") // dnaroutes.ParseLocationsFromPost(c)
+
+	if search == "" {
+		web.BadReqResp(c, ErrSearchTooShort)
+		return
+	}
+
+	//fuzzyMode := c.Query("mode") == "fuzzy"
+
+	n := web.ParseN(c, 20)
+
+	query, err := parseQuery(c, "id")
 
 	if err != nil {
 		c.Error(err)
 		return
 	}
+
+	canonical := strings.HasPrefix(strings.ToLower(c.Query("canonical")), "t")
+
+	log.Debug().Msgf("searching for gene: %s,  canonical: %v, type: %s",
+		search, canonical, query.Biotype)
+
+	features, _ := query.Db.SearchByName(search,
+		query.Feature,
+		canonical,
+		int16(n))
+
+	log.Debug().Msgf("found %d features", len(features))
+
+	// if err != nil {
+	// 	return web.ErrorReq(err)
+	// }
 
 	web.MakeDataResp(c, "", &features)
 }

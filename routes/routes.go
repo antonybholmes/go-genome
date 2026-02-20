@@ -95,9 +95,9 @@ func ParseFeature(c *gin.Context) string {
 
 func parseGeneQuery(c *gin.Context) (*GeneQuery, error) {
 
-	assembly := web.FormatParam(c.Param("assembly"))
+	annotationId := web.FormatParam(c.Param("id"))
 
-	if assembly == "" {
+	if annotationId == "" {
 		return nil, errors.New("assembly cannot be empty")
 	}
 
@@ -109,7 +109,7 @@ func parseGeneQuery(c *gin.Context) (*GeneQuery, error) {
 	// // change assembly to normalized form
 	// assembly = genomeNormMap[assembly]
 
-	log.Debug().Msgf("using assembly: %s", assembly)
+	log.Debug().Msgf("using assembly: %s", annotationId)
 
 	//dbFile := genomeToFileMap[assembly]
 
@@ -130,14 +130,14 @@ func parseGeneQuery(c *gin.Context) (*GeneQuery, error) {
 
 	promoterRegion := ParsePromoterRegion(c)
 
-	db, err := genomedb.GtfDB(assembly)
+	db, err := genomedb.GtfFromId(annotationId)
 
 	if err != nil {
-		return nil, fmt.Errorf("unable to open database for assembly %s %s", assembly, err)
+		return nil, fmt.Errorf("unable to open database for assembly %s %s", annotationId, err)
 	}
 
 	return &GeneQuery{
-			Assembly:  assembly,
+			Assembly:  annotationId,
 			GeneType:  geneType,
 			Db:        db,
 			Feature:   feature,
@@ -201,6 +201,7 @@ func OverlappingGenesRoute(c *gin.Context) {
 			query.Feature,
 			query.Promoter,
 			query.Canonical,
+			false,
 			query.GeneType)
 
 		if err != nil {
@@ -270,7 +271,7 @@ func WithinGenesRoute(c *gin.Context) {
 		return
 	}
 
-	data := make([]*genome.GenomicFeatures, len(locations))
+	data := make([]*genome.GenomicSearchResults, len(locations))
 
 	for li, location := range locations {
 		genes, err := query.Db.WithinGenes(location, query.Feature, query.Promoter)
@@ -304,7 +305,7 @@ func ClosestGeneRoute(c *gin.Context) {
 
 	closestN := web.ParseNumParam(c, "closest", DefaultClosestN)
 
-	data := make([]*genome.GenomicFeatures, len(locations))
+	data := make([]*genome.GenomicSearchResults, len(locations))
 
 	for li, location := range locations {
 		genes, err := query.Db.ClosestGenes(location, query.Promoter, int8(closestN))
@@ -314,7 +315,7 @@ func ClosestGeneRoute(c *gin.Context) {
 			return
 		}
 
-		data[li] = &genome.GenomicFeatures{Location: location, Feature: genome.GeneLevel, Features: genes}
+		data[li] = &genome.GenomicSearchResults{Location: location, Type: genome.GeneLevel, Features: genes}
 	}
 
 	web.MakeDataResp(c, "", &data)

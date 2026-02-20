@@ -90,10 +90,10 @@ const (
 		a.name,
 		a.url,
 		FROM annotations a
-		JOIN assemblies am ON a.assembly_id = am.id
+		JOIN assemblies asm ON a.assembly_id = asm.id
 		JOIN genomes g ON asm.genome_id = g.id
 		JOIN annotation_types at ON a.annotation_type_id = at.id
-		JOIN assembly_aliases aa ON am.id = aa.assembly_id
+		JOIN assembly_aliases aa ON asm.id = aa.assembly_id
 		WHERE 
 			(am.public_id = :assembly OR LOWER(aa.alias) = :assembly)
 		ORDER BY a.name`
@@ -127,6 +127,22 @@ const (
 		WHERE a.rank = 1
 		ORDER BY a.genome, a.name`
 
+	AnnotationsFromIdSql = `SELECT DISTINCT
+		a.id,
+		a.public_id,
+		g.name AS genome,
+		asm.name AS assembly,
+		at.name AS type,
+		a.name,
+		a.url
+		FROM annotations a
+		JOIN assemblies asm ON a.assembly_id = asm.id
+		JOIN genomes g ON asm.genome_id = g.id
+		JOIN annotation_types at ON a.annotation_type_id = at.id
+		JOIN assembly_aliases aa ON asm.id = aa.assembly_id
+		WHERE
+			a.public_id = :id`
+
 	AnnotationsByTypeSql = `SELECT DISTINCT
 		a.public_id,
 		g.name AS genome,
@@ -138,7 +154,7 @@ const (
 		JOIN assemblies asm ON a.assembly_id = asm.id
 		JOIN genomes g ON asm.genome_id = g.id
 		JOIN annotation_types at ON a.annotation_type_id = at.id
-		JOIN assembly_aliases aa ON am.id = aa.assembly_id
+		JOIN assembly_aliases aa ON asm.id = aa.assembly_id
 		WHERE
 			LOWER(at.name) = :type
 			AND (asm.public_id = :assembly OR LOWER(aa.alias) = :assembly)
@@ -216,6 +232,30 @@ func (gdb *GenomeDB) Assemblies(genome string) ([]*sys.Entity, error) {
 	return assemblies, nil
 }
 
+func (gdb *GenomeDB) Annotation(id string) (*Annotation, error) {
+
+	namedArgs := []any{
+		sql.Named("id", strings.ToLower(id)),
+	}
+
+	var annotation Annotation
+
+	err := gdb.db.QueryRow(AnnotationsFromIdSql, namedArgs...).Scan(
+		&annotation.Id,
+		&annotation.PublicId,
+		&annotation.Genome,
+		&annotation.Assembly,
+		&annotation.Type,
+		&annotation.Name,
+		&annotation.Url)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &annotation, nil
+}
+
 func (gdb *GenomeDB) Annotations(assembly string, annotationType string) ([]*Annotation, error) {
 
 	namedArgs := []any{
@@ -290,6 +330,21 @@ func (gdb *GenomeDB) Annotations(assembly string, annotationType string) ([]*Ann
 // 		return GeneLevel
 // 	}
 // }
+
+// Lookup a db using its public id
+func (gdb *GenomeDB) GtfFromId(id string) (*GtfDB, error) {
+	//_, ok := cache.cacheMap[assembly]
+
+	annotation, err := gdb.Annotation(id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	db := NewGtfDB(gdb.dir, annotation)
+
+	return db, nil
+}
 
 // From the genome central db, look for the latest GTF annotation for the given assembly
 func (gdb *GenomeDB) GtfDB(assembly string) (*GtfDB, error) {

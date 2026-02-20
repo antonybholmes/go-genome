@@ -28,7 +28,11 @@ func Dir() string {
 	return instance.Dir()
 }
 
-func GtfDB(assembly string) (*genome.GtfDB, error) {
+func GtfFromId(id string) (*genome.GtfDB, error) {
+	return instance.GtfFromId(id)
+}
+
+func GTFFromAssembly(assembly string) (*genome.GtfDB, error) {
 	//return instance.GeneDB(assembly, v2.NewGeneDB)
 	return instance.GtfDB(assembly)
 }

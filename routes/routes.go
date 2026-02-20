@@ -22,10 +22,11 @@ import (
 // A GeneQuery contains info from query params.
 type (
 	GeneQuery struct {
-		Feature  string
-		Db       *genome.GtfDB
-		Assembly string
-		GeneType string // e.g. "protein_coding", "non_coding", etc.
+		Id string
+		//Assembly string
+		Feature string
+		Db      *genome.GtfDB
+		Biotype string // e.g. "protein_coding", "non_coding", etc.
 		// only show canonical genes
 		Canonical bool
 		Promoter  *dna.PromoterRegion
@@ -93,11 +94,13 @@ func ParseFeature(c *gin.Context) string {
 
 }
 
-func parseGeneQuery(c *gin.Context) (*GeneQuery, error) {
+// Parse the standard query parameters for gene routes.
+// param is the name of the URL parameter to use for the assembly or id.
+func parseQuery(c *gin.Context, param string) (*GeneQuery, error) {
 
-	annotationId := web.FormatParam(c.Param("id"))
+	id := web.FormatParam(c.Param(param))
 
-	if annotationId == "" {
+	if id == "" {
 		return nil, errors.New("assembly cannot be empty")
 	}
 
@@ -108,8 +111,6 @@ func parseGeneQuery(c *gin.Context) (*GeneQuery, error) {
 
 	// // change assembly to normalized form
 	// assembly = genomeNormMap[assembly]
-
-	log.Debug().Msgf("using assembly: %s", annotationId)
 
 	//dbFile := genomeToFileMap[assembly]
 
@@ -126,19 +127,28 @@ func parseGeneQuery(c *gin.Context) (*GeneQuery, error) {
 
 	canonical := strings.HasPrefix(strings.ToLower(c.Query("canonical")), "t")
 
-	geneType := ParseGeneType(c)
+	biotype := ParseBiotype(c)
 
 	promoterRegion := ParsePromoterRegion(c)
 
-	db, err := genomedb.GtfFromId(annotationId)
+	var db *genome.GtfDB
+	var err error
+
+	if param == "assembly" {
+
+		db, err = genomedb.GtfFromAssembly(id)
+	} else {
+		db, err = genomedb.GtfFromId(id)
+	}
 
 	if err != nil {
-		return nil, fmt.Errorf("unable to open database for assembly %s %s", annotationId, err)
+		return nil, fmt.Errorf("unable to open database for assembly %s %s", id, err)
 	}
 
 	return &GeneQuery{
-			Assembly:  annotationId,
-			GeneType:  geneType,
+			Id: id,
+			//Assembly:  id,
+			Biotype:   biotype,
 			Db:        db,
 			Feature:   feature,
 			Canonical: canonical,
@@ -181,7 +191,7 @@ func OverlappingGenesRoute(c *gin.Context) {
 		return
 	}
 
-	query, err := parseGeneQuery(c)
+	query, err := parseQuery(c, "id")
 
 	if err != nil {
 		c.Error(err)
@@ -194,15 +204,13 @@ func OverlappingGenesRoute(c *gin.Context) {
 
 	ret := make([]*GenesResp, 0, len(locations))
 
-	log.Debug().Msgf("querying for %d locations ", len(locations))
-
 	for _, location := range locations {
 		features, err := query.Db.OverlappingGenes(location,
 			query.Feature,
 			query.Promoter,
 			query.Canonical,
 			false,
-			query.GeneType)
+			query.Biotype)
 
 		if err != nil {
 			c.Error(err)
@@ -228,7 +236,7 @@ func SearchForGeneByNameRoute(c *gin.Context) {
 
 	n := web.ParseN(c, 20)
 
-	query, err := parseGeneQuery(c)
+	query, err := parseQuery(c, "assembly")
 
 	if err != nil {
 		c.Error(err)
@@ -237,21 +245,20 @@ func SearchForGeneByNameRoute(c *gin.Context) {
 
 	canonical := strings.HasPrefix(strings.ToLower(c.Query("canonical")), "t")
 
-	log.Debug().Msgf("searching for gene: %s, fuzzy: %v, canonical: %v, type: %s",
-		search, fuzzyMode, canonical, query.GeneType)
+	// log.Debug().Msgf("searching for gene: %s, fuzzy: %v, canonical: %v, type: %s",
+	// 	search, fuzzyMode, canonical, query.Biotype)
 
-	features, _ := query.Db.SearchByName(search,
+	features, err := query.Db.SearchByName(search,
 		query.Feature,
 		fuzzyMode,
 		canonical,
 		c.Query("type"),
 		int16(n))
 
-	log.Debug().Msgf("found %d features", len(features))
-
-	// if err != nil {
-	// 	return web.ErrorReq(err)
-	// }
+	if err != nil {
+		c.Error(err)
+		return
+	}
 
 	web.MakeDataResp(c, "", &features)
 }
@@ -264,7 +271,7 @@ func WithinGenesRoute(c *gin.Context) {
 		return
 	}
 
-	query, err := parseGeneQuery(c)
+	query, err := parseQuery(c, "assembly")
 
 	if err != nil {
 		c.Error(err)
@@ -296,7 +303,7 @@ func ClosestGeneRoute(c *gin.Context) {
 		return
 	}
 
-	query, err := parseGeneQuery(c)
+	query, err := parseQuery(c, "assembly")
 
 	if err != nil {
 		c.Error(err)
@@ -321,7 +328,7 @@ func ClosestGeneRoute(c *gin.Context) {
 	web.MakeDataResp(c, "", &data)
 }
 
-func ParseGeneType(c *gin.Context) string {
+func ParseBiotype(c *gin.Context) string {
 	geneType := c.Query("type")
 
 	// user can specify gene type in query string, but we sanitize it
@@ -369,7 +376,7 @@ func AnnotateRoute(c *gin.Context) {
 	// limit amount of data returned per request to 1000 entries at a time
 	locations = locations[0:basemath.Min(len(locations), MaxAnnotations)]
 
-	query, err := parseGeneQuery(c)
+	query, err := parseQuery(c, "assembly")
 
 	if err != nil {
 		c.Error(err)

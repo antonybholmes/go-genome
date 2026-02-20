@@ -32,9 +32,8 @@ func GtfFromId(id string) (*genome.GtfDB, error) {
 	return instance.GtfFromId(id)
 }
 
-func GTFFromAssembly(assembly string) (*genome.GtfDB, error) {
-	//return instance.GeneDB(assembly, v2.NewGeneDB)
-	return instance.GtfDB(assembly)
+func GtfFromAssembly(assembly string) (*genome.GtfDB, error) {
+	return instance.GtfFromAssembly(assembly)
 }
 
 func Gtfs() ([]*genome.Annotation, error) {

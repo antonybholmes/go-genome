@@ -16,11 +16,9 @@ import (
 
 type (
 	GtfDB struct {
-		db   *sql.DB
-		file string
-		//withinGeneAndPromStmt *sql.Stmt
-
+		db         *sql.DB
 		annotation *Annotation
+		file       string
 	}
 
 	// GtfDBInfo struct {
@@ -97,93 +95,6 @@ const (
 	GeneAndExonLevels       string = "gene,exon"
 	TranscriptAndExonLevels string = "transcript,exon"
 
-	// StandardGeneFieldsSql = `SELECT DISTINCT
-	// 	g.id,
-	// 	g.feature,
-	// 	g.seqname,
-	// 	g.start,
-	// 	g.end,
-	// 	g.strand,
-	// 	g.gene_id,
-	// 	g.gene_name,
-	// 	g.type,
-	// 	g.is_canonical,
-	// 	g.transcript_id,
-	// 	g.transcript_name,
-	// 	g.exon_number`
-
-	// GeneInfoSql = StandardGeneFieldsSql +
-	// 	`, 0 as tss_dist
-	// 	FROM gtf AS g
-	// 	WHERE g.feature = 'gene' AND (g.gene_name LIKE :q OR g.gene_id LIKE :q)`
-
-	// TranscriptInfoSql = StandardGeneFieldsSql +
-	// 	` FROM gtf AS g
-	// 	WHERE g.feature = 'transcript' AND (g.gene_name LIKE :q OR g.gene_id LIKE :q OR g.transcript_id LIKE :q)`
-
-	// const GENE_INFO_FUZZY_SQL = `SELECT id, chr, start, end, strand, gene_id, gene_name, transcript_id, gene_type, 0 as tss_dist
-	//  	FROM gene
-	//   	WHERE (gene_name LIKE ?2 OR g.gene_id LIKE ?2 OR g.transcript_id LIKE ?2)
-	//  	ORDER BY chr, start
-	// 	LIMIT ?3`
-
-	// WithinGeneSql = StandardGeneFieldsSql +
-	// 	`, ?3 - g.tss as tss_dist
-	// 	FROM gtf AS g
-	// 	WHERE g.feature = ?1 AND g.seqname = ?2 AND (g.start <= ?5 AND g.end >= ?4)
-	// 	ORDER BY g.start`
-
-	// TranscriptsPerGene = StandardGeneFieldsSql +
-	// 	`, ?3 - g.tss as tss_dist
-	// 	FROM gtf AS g
-	// 	WHERE g.feature = ?1 AND g.seqname = ?2
-	// 	ORDER BY ABS(tss_dist)
-	// 	LIMIT ?4`
-
-	// const CLOSEST_TRANSCRIPT_SQL = `SELECT
-	// 	g.id,
-	// 	g.feature,
-	// 	g.seqname,
-	// 	t.start,
-	// 	t.end,
-	// 	g.strand,
-	// 	g.gene_id,
-	// 	g.gene_name,
-	// 	gt.name as gene_type,
-	// 	t.transcript_id,
-	// 	t.is_canonical,
-	// 	tt.name as transcript_type,
-	// 	?1 - g.tss as tss_dist
-	// 	FROM transcript AS t
-	// 	INNER JOIN gene AS g ON g.id = t.gene_id
-	// 	INNER JOIN gene_type AS gt ON g.gene_type_id = gt.id
-	// 	INNER JOIN transcript_type AS tt ON t.transcript_type_id = tt.id
-	//  	WHERE g.seqname = ?1
-	//  	ORDER BY ABS(g.tss - ?2)
-	//  	LIMIT ?3`
-
-	// InGeneAndPromoterSql = `SELECT DISTINCT
-	// 	g.id,
-	// 	g.chr,
-	// 	g.start,
-	// 	g.end,
-	// 	g.strand,
-	// 	g.gene_id,
-	// 	g.gene_symbol,
-	// 	gt.name as gene_type,
-	// 	CASE
-	// 		WHEN strand = '-' THEN ?2 - g.end
-	// 		ELSE ?2 - g.start
-	// 	END AS tss_dist
-	// 	FROM genes as g
-	// 	JOIN gene_types AS gt ON g.gene_type_id = gt.id
-	// 	WHERE g.chr = ?1 AND
-	// 	(
-	// 		((g.start - ?5 <= ?4 AND g.end + ?6 >= ?3) AND g.strand = '+') OR
-	// 		((g.start - ?6 >= ?4 AND g.end + ?5 <= ?3) AND g.strand = '-')
-	// 	)
-	// 	ORDER BY tss_dist`
-
 	// search within transcripts and their promoters
 
 	BasicLocationSql = `SELECT DISTINCT
@@ -200,7 +111,6 @@ const (
 		t.end,
 		t.is_canonical,
 		t.is_longest,
-		tt.name AS transcript_biotype,
 		ft.name AS feature_type,
 		f.start,
 		f.end,
@@ -211,8 +121,7 @@ const (
 		JOIN features AS f ON f.transcript_id = t.id
 		JOIN feature_types AS ft ON f.feature_type_id = ft.id
 		JOIN exons AS e ON f.exon_id = e.id
-		JOIN biotypes AS gt ON g.biotype_id = gt.id
-		JOIN biotypes AS tt ON t.biotype_id = tt.id`
+		JOIN biotypes AS gt ON g.biotype_id = gt.id`
 
 	CoreLocationSql = `SELECT DISTINCT
 		g.id, 
@@ -228,7 +137,6 @@ const (
 		t.end,
 		t.is_canonical,
 		t.is_longest,
-		tt.name AS transcript_biotype,
 		ft.name AS feature_type,
 		f.start,
 		f.end,
@@ -248,8 +156,7 @@ const (
 		JOIN features AS f ON f.transcript_id = t.id
 		JOIN feature_types AS ft ON f.feature_type_id = ft.id
 		JOIN exons AS e ON f.exon_id = e.id
-		JOIN biotypes AS gt ON g.biotype_id = gt.id
-		JOIN biotypes AS tt ON t.biotype_id = tt.id`
+		JOIN biotypes AS gt ON g.biotype_id = gt.id`
 
 	CdsSql = `SELECT DISTINCT
 		e.id,
@@ -308,36 +215,6 @@ const (
 		` WHERE e.transcript_id = :transcriptId AND (e.start <= :end AND e.end >= :start)
 		ORDER BY e.start, e.end DESC`
 
-	// OverlapSql = `SELECT DISTINCT
-	// 	g.id,
-	// 	g.chr,
-	// 	g.start,
-	// 	g.end,
-	// 	g.strand,
-	// 	g.gene_id,
-	// 	g.gene_symbol,
-	// 	gt.name as gene_type,
-	// 	t.transcript_id,
-	// 	t.start,
-	// 	t.end,
-	// 	t.is_canonical,
-	// 	t.is_longest,
-	// 	tt.name as transcript_type,
-	// 	e.exon_id,
-	// 	e.start,
-	// 	e.end,
-	// 	e.exon_number,
-	// 	CASE
-	// 		WHEN strand = '-' THEN ?2 - t.end
-	// 		ELSE ?2 - t.start
-	// 	END AS tss_dist
-	// 	FROM genes as g
-	// 	JOIN transcripts AS t ON g.id = t.gene_id
-	// 	JOIN exons AS e ON e.transcript_id = t.id
-	// 	JOIN gene_types AS gt ON g.gene_type_id = gt.id
-	// 	JOIN transcript_types AS tt ON t.transcript_type_id = tt.id
-	// 	WHERE g.chr = ?1 AND (g.start <= ?3 AND g.end >= ?2)`
-
 	// order by gene, then transcript, then exon number, then feature type
 	// so that exons come before cds and cds come before utrs, which is important for building the gene structure in memory
 	BasicOverlapSql = BasicLocationSql +
@@ -362,69 +239,10 @@ const (
 			f.end,
 			f.feature_type_id`
 
-	// If start is less x2 and end is greater than x1, it constrains the feature to be overlapping
-	// our location
-	// const OVERLAPPING_GENES_FROM_LOCATION_SQL = `SELECT
-	// 	g.id,
-	// 	g.seqname,
-	// 	g.start,
-	// 	g.end,
-	// 	g.strand,
-	// 	g.gene_id,
-	// 	g.gene_name,
-	// 	gt.name as gene_type
-	// 	FROM gene AS g
-	// 	INNER JOIN gene_type AS gt ON g.gene_type_id = gt.id
-	// 	WHERE g.seqname = ?1 AND (g.start <= ?3 AND g.end >= ?2)`
-
-	// get all genes, transcripts, and exons overlapping a location
-	// which we can use to build a nested gene structure
-	// OverlapLocationSql = StandardGeneFieldsSql +
-	// 	` FROM gtf AS g
-	// 	WHERE g.seqname = ?1 AND (g.start <= ?3 AND g.end >= ?2)`
-
 	OverlapOrderBySql = ` ORDER BY 
 		g.gene_id,
 		t.transcript_id,
 		e.exon_number`
-
-	// const TRANSCRIPTS_IN_GENE_SQL = `SELECT
-	// 	t.id,
-	// 	g.seqname,
-	// 	t.start,
-	// 	t.end,
-	// 	g.strand,
-	// 	gt.name as gene_type,
-	// 	t.transcript_id,
-	// 	t.is_canonical,
-	// 	tt.name as transcript_type
-	// 	FROM transcript AS t
-	// 	INNER JOIN gene AS g ON g.id = t.gene_id
-	// 	INNER JOIN gene_type AS gt ON g.gene_type_id = gt.id
-	// 	INNER JOIN transcript_type AS tt ON t.transcript_type_id = tt.id
-	// 	WHERE t.gene_id = ?1`
-
-	// const CANONICAL_TRANSCRIPTS_IN_GENE_SQL = `SELECT id, level, chr, start, end, strand, transcript_id, is_canonical, gene_type
-	// 	FROM gene
-	// 	WHERE level = 2 AND gene_id = ?1 AND is_canonical = 1
-	// 	ORDER BY start`
-
-	// const EXONS_IN_TRANSCRIPT_SQL = `SELECT
-	// 	e.id,
-	// 	g.seqname,
-	// 	e.start,
-	// 	e.end,
-	// 	g.strand,
-	// 	gt.name as gene_type,
-	// 	e.exon_id,
-	// 	t.is_canonical,
-	// 	tt.name as transcript_type
-	// 	FROM exon AS e
-	// 	INNER JOIN transcript AS t ON t.id = e.transcript_id
-	// 	INNER JOIN gene AS g ON g.id = t.gene_id
-	// 	INNER JOIN gene_type AS gt ON g.gene_type_id = gt.id
-	// 	INNER JOIN transcript_type AS tt ON t.transcript_type_id = tt.id
-	// 	WHERE e.transcript_id = ?1`
 
 	IdToNameSql = `SELECT name FROM ids WHERE id = ?1`
 )
@@ -485,7 +303,7 @@ func (gtfdb *GtfDB) OverlappingGenes(location *dna.Location,
 	annotationMode bool,
 	biotypeFilter string) ([]*GenomicFeature, error) {
 
-	log.Debug().Msgf("canonical mode %v gene type filter %s", canonicalMode, biotypeFilter)
+	//log.Debug().Msgf("canonical mode %v gene type filter %s", canonicalMode, biotypeFilter)
 
 	var geneRows *sql.Rows
 	var err error
@@ -508,7 +326,7 @@ func (gtfdb *GtfDB) OverlappingGenes(location *dna.Location,
 
 	stmt = strings.Replace(stmt, "<<LEVEL>>", levelTable, 1)
 
-	log.Debug().Msgf("querying overlapping genes with sql %s", stmt)
+	//log.Debug().Msgf("querying overlapping genes with sql %s", stmt)
 
 	geneRows, err = gtfdb.db.Query(stmt,
 		sql.Named("chr", location.Chr()),
@@ -520,7 +338,6 @@ func (gtfdb *GtfDB) OverlappingGenes(location *dna.Location,
 		sql.Named("biotype", biotypeFilter))
 
 	if err != nil {
-		log.Error().Msgf("error querying overlapping gene %s", err)
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
@@ -742,7 +559,7 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool, annotation
 	var geneBiotype string
 
 	var transcriptId string
-	var transcriptBiotype string
+	//var transcriptBiotype string
 	var transcriptStart int
 	var transcriptEnd int
 
@@ -791,7 +608,6 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool, annotation
 				&transcriptEnd,
 				&isCanonical,
 				&isLongest,
-				&transcriptBiotype,
 				&featureType, // are an exon, cds, or utr
 				&featureStart,
 				&featureEnd,
@@ -818,7 +634,6 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool, annotation
 				&transcriptEnd,
 				&isCanonical,
 				&isLongest,
-				&transcriptBiotype,
 				&featureType, // are an exon, cds, or utr
 				&featureStart,
 				&featureEnd,
@@ -896,9 +711,9 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool, annotation
 				GeneSymbol:   geneSymbol,
 				GeneId:       geneId,
 				TranscriptId: transcriptId,
-				Biotype:      transcriptBiotype,
-				IsCanonical:  isCanonical,
-				IsLongest:    isLongest,
+				//Biotype:      transcriptBiotype,
+				IsCanonical: isCanonical,
+				IsLongest:   isLongest,
 			}
 
 			if annotationMode {

@@ -24,9 +24,9 @@ const (
 			g.strand, 
 			g.gene_id, 
 			g.gene_symbol,
-			gt.name AS gene_type
+			gt.name AS biotype
 	FROM genes as g
-	JOIN gene_types AS gt ON g.gene_type_id = gt.id
+	JOIN biotypes AS gt ON g.biotype_id = gt.id
 	WHERE (g.gene_symbol LIKE :q OR g.gene_id LIKE :q)
 	ORDER BY g.gene_symbol
 	LIMIT :n`
@@ -41,19 +41,18 @@ const (
 				g.strand, 
 				g.gene_id, 
 				g.gene_symbol,
-				gt.name AS gene_type,
+				gt.name AS biotype,
 				t.transcript_id,
 				t.start,
 				t.end,
 				t.is_canonical,
 				t.is_longest,
-				tt.name AS transcript_type,
 				ROW_NUMBER() OVER (PARTITION BY g.gene_id ORDER BY g.gene_id) AS rank
 			FROM genes as g
 			JOIN transcripts AS t ON g.id = t.gene_id
-			JOIN gene_types AS gt ON g.gene_type_id = gt.id
-			JOIN biotypes AS tt ON t.biotype_id = tt.id 
-			WHERE (g.gene_symbol LIKE :q OR g.gene_id LIKE :q OR t.transcript_id LIKE :q) {{whereClause}}
+			JOIN biotypes AS gt ON g.biotype_id = gt.id
+			WHERE (g.gene_symbol LIKE :q OR g.gene_id LIKE :q OR t.transcript_id LIKE :q) 
+				<<CANONICAL>>
 			ORDER BY g.gene_symbol
 		) g
 		WHERE g.rank < :n`
@@ -68,13 +67,12 @@ const (
 				g.strand, 
 				g.gene_id, 
 				g.gene_symbol,
-				gt.name AS gene_type,
+				gt.name AS biotype,
 				t.transcript_id,
 				t.start,
 				t.end,
 				t.is_canonical,
 				t.is_longest,
-				tt.name AS transcript_type,
 				e.exon_id,
 				e.start,
 				e.end,
@@ -83,9 +81,9 @@ const (
 			FROM genes as g
 			JOIN transcripts AS t ON g.id = t.gene_id
 			JOIN exons AS e ON e.transcript_id = t.id
-			JOIN gene_types AS gt ON g.gene_type_id = gt.id
-			JOIN biotypes AS tt ON t.biotype_id = tt.id 
-			WHERE (g.gene_symbol LIKE :q OR g.gene_id LIKE :q OR t.transcript_id LIKE :q OR e.exon_id LIKE :q) {{whereClause}}
+			JOIN biotypes AS gt ON g.biotype_id = gt.id
+			WHERE (g.gene_symbol LIKE :q OR g.gene_id LIKE :q OR t.transcript_id LIKE :q OR e.exon_id LIKE :q) 
+				<<CANONICAL>>
 			ORDER BY g.gene_symbol
 		) g
 		WHERE g.rank < :n`
@@ -121,9 +119,7 @@ func (gtfdb *GtfDB) SearchByName(search string,
 			canonicalMode,
 			true,
 			n)
-
 	default:
-		log.Debug().Msgf("searching for genes with term %s", search)
 		return gtfdb.searchGenes(search, n)
 	}
 
@@ -146,9 +142,9 @@ func (gtfdb *GtfDB) searchTranscripts(search string,
 	}
 
 	if canonicalMode {
-		sqlStmt = strings.Replace(sqlStmt, "{{whereClause}}", "AND t.is_canonical = 1", 1)
+		sqlStmt = strings.Replace(sqlStmt, "<<CANONICAL>>", "AND t.is_canonical = 1", 1)
 	} else {
-		sqlStmt = strings.Replace(sqlStmt, "{{whereClause}}", "", 1)
+		sqlStmt = strings.Replace(sqlStmt, "<<CANONICAL>>", "", 1)
 	}
 
 	//log.Debug().Msgf("SQL: %s %s %d", sqlStmt, search, n)
@@ -158,7 +154,6 @@ func (gtfdb *GtfDB) searchTranscripts(search string,
 		sql.Named("n", n))
 
 	if err != nil {
-		log.Debug().Msgf("error querying gene by name %s", err)
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
@@ -176,17 +171,11 @@ func (gtfdb *GtfDB) searchGenes(search string,
 	n int16) ([]*GenomicFeature, error) {
 	n = max(1, min(n, MaxGeneInfoResults))
 
-	//log.Debug().Msgf("SearchForGeneByName for gene %s level %s fuzzy %v canonical %v geneType %s n %d",
-	//	search, level, fuzzy, canonical, geneType, n)
-
-	//log.Debug().Msgf("SQL: %s %s %d", sqlStmt, search, n)
-
 	rows, err := gtfdb.db.Query(GeneInfoSql,
 		sql.Named("q", search),
 		sql.Named("n", n))
 
 	if err != nil {
-		log.Debug().Msgf("error querying gene by name %s", err)
 		return nil, err //fmt.Errorf("there was an error with the database query")
 	}
 
@@ -258,7 +247,7 @@ func genesToGeneInfoRecords(rows *sql.Rows) ([]*GenomicFeature, error) {
 
 	}
 
-	log.Debug().Msgf("converted rows to %d features", len(ret))
+	//log.Debug().Msgf("converted rows to %d features", len(ret))
 
 	return ret, nil
 }
@@ -272,10 +261,10 @@ func transcriptsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*Genomi
 	var strand string
 	var geneSymbol string
 	var geneId string
-	var geneType string
+	var biotype string
 
 	var transcriptId string
-	var transcriptType string
+	//var transcriptType string
 	var transcriptStart int
 	var transcriptEnd int
 
@@ -301,13 +290,12 @@ func transcriptsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*Genomi
 			&strand,
 			&geneId,
 			&geneSymbol,
-			&geneType,
+			&biotype,
 			&transcriptId,
 			&transcriptStart,
 			&transcriptEnd,
 			&isCanonical,
 			&isLongest,
-			&transcriptType,
 			&rank,
 		)
 
@@ -332,7 +320,7 @@ func transcriptsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*Genomi
 				GeneSymbol: geneSymbol,
 				GeneId:     geneId,
 				//Strand:   strand,
-				Biotype: geneType,
+				Biotype: biotype,
 				//Children: make([]*GenomicFeature, 0, 10)
 			}
 
@@ -369,7 +357,7 @@ func transcriptsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*Genomi
 				TranscriptId: transcriptId,
 				IsCanonical:  isCanonical,
 				IsLongest:    isLongest,
-				Biotype:      transcriptType,
+				//Biotype:      transcriptType,
 				//Children: make([]*GenomicFeature, 0, 10)
 			}
 
@@ -385,7 +373,7 @@ func transcriptsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*Genomi
 		}
 	}
 
-	log.Debug().Msgf("converted rows to %d features", len(ret))
+	//log.Debug().Msgf("converted rows to %d features", len(ret))
 
 	return ret, nil
 }
@@ -399,10 +387,10 @@ func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*GenomicFeatu
 	var strand string
 	var geneSymbol string
 	var geneId string
-	var geneType string
+	var biotype string
 
 	var transcriptId string
-	var transcriptType string
+	//var transcriptType string
 	var transcriptStart int
 	var transcriptEnd int
 
@@ -434,13 +422,12 @@ func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*GenomicFeatu
 			&strand,
 			&geneId,
 			&geneSymbol,
-			&geneType,
+			&biotype,
 			&transcriptId,
 			&transcriptStart,
 			&transcriptEnd,
 			&isCanonical,
 			&isLongest,
-			&transcriptType,
 			&exonId,
 			&exonStart,
 			&exonEnd,
@@ -469,7 +456,7 @@ func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*GenomicFeatu
 				GeneSymbol: geneSymbol,
 				GeneId:     geneId,
 				//Strand:   strand,
-				Biotype: geneType,
+				Biotype: biotype,
 				//Children: make([]*GenomicFeature, 0, 10)
 			}
 
@@ -506,7 +493,7 @@ func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*GenomicFeatu
 				TranscriptId: transcriptId,
 				IsCanonical:  isCanonical,
 				IsLongest:    isLongest,
-				Biotype:      transcriptType,
+				//Biotype:      transcriptType,
 				//Children: make([]*GenomicFeature, 0, 10)
 			}
 
@@ -556,7 +543,7 @@ func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*GenomicFeatu
 
 	}
 
-	log.Debug().Msgf("converted rows to %d features", len(ret))
+	//log.Debug().Msgf("converted rows to %d features", len(ret))
 
 	return ret, nil
 }

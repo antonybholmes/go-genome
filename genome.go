@@ -19,10 +19,8 @@ type (
 	//string string
 
 	GenomeDB struct {
-		//cacheMap map[string]*GtfDBInfo
-		//dbCreator func(assembly string, dir string) GeneDB
-		dir string
 		db  *sql.DB
+		dir string
 	}
 
 	// GeneDB interface {
@@ -55,13 +53,13 @@ type (
 	// }
 
 	Annotation struct {
-		Id       int    `json:"-"`
 		PublicId string `json:"id"`
 		Genome   string `json:"genome"`
 		Assembly string `json:"assembly"`
 		Type     string `json:"type"`
 		Name     string `json:"name"`
 		Url      string `json:"-"`
+		Id       int    `json:"-"`
 	}
 )
 
@@ -83,9 +81,10 @@ const (
 		ORDER BY a.name`
 
 	AnnotationsSql = `SELECT DISTINCT
+		a.id,
 		a.public_id,
 		g.name AS genome,
-		am.name AS assembly,
+		asm.name AS assembly,
 		at.name AS type,
 		a.name,
 		a.url,
@@ -144,6 +143,7 @@ const (
 			a.public_id = :id`
 
 	AnnotationsByTypeSql = `SELECT DISTINCT
+		a.id,
 		a.public_id,
 		g.name AS genome,
 		asm.name AS assembly,
@@ -256,6 +256,8 @@ func (gdb *GenomeDB) Annotation(id string) (*Annotation, error) {
 	return &annotation, nil
 }
 
+// For a given assembly and type, e.g. gtf, return all the associated
+// annotation dbs
 func (gdb *GenomeDB) Annotations(assembly string, annotationType string) ([]*Annotation, error) {
 
 	namedArgs := []any{
@@ -266,7 +268,6 @@ func (gdb *GenomeDB) Annotations(assembly string, annotationType string) ([]*Ann
 	datasetRows, err := gdb.db.Query(AnnotationsByTypeSql, namedArgs...)
 
 	if err != nil {
-		log.Debug().Msgf("%s", err)
 		return nil, err
 	}
 
@@ -347,7 +348,7 @@ func (gdb *GenomeDB) GtfFromId(id string) (*GtfDB, error) {
 }
 
 // From the genome central db, look for the latest GTF annotation for the given assembly
-func (gdb *GenomeDB) GtfDB(assembly string) (*GtfDB, error) {
+func (gdb *GenomeDB) GtfFromAssembly(assembly string) (*GtfDB, error) {
 	//_, ok := cache.cacheMap[assembly]
 
 	annotations, err := gdb.Annotations(assembly, "gtf")

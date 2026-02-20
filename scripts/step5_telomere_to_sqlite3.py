@@ -7,15 +7,15 @@ Created on Thu Jun 26 10:35:40 2014
 @author: Antony Holmes
 """
 
-import sys
 import collections
-import re
-import os
-import pandas as pd
-import numpy as np
 import gzip
+import os
+import re
 import sqlite3
+import sys
 
+import numpy as np
+import pandas as pd
 
 files = [
     [

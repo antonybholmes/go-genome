@@ -7,20 +7,20 @@ import (
 )
 
 var (
-	instance *genome.GeneDBCache
+	instance *genome.GenomeDB
 	once     sync.Once
 )
 
-func InitCache(dir string) *genome.GeneDBCache {
+func InitCache(dir string) *genome.GenomeDB {
 	once.Do(func() {
 		//instance = genome.NewGeneDBCache(dir, v2.NewGeneDB)
-		instance = genome.NewGeneDBCache(dir)
+		instance = genome.NewGenomeDB(dir)
 	})
 
 	return instance
 }
 
-func GetInstance() *genome.GeneDBCache {
+func GetInstance() *genome.GenomeDB {
 	return instance
 }
 
@@ -28,11 +28,11 @@ func Dir() string {
 	return instance.Dir()
 }
 
-func GeneDB(assembly string) (*genome.GeneDB, error) {
+func GtfDB(assembly string) (*genome.GtfDB, error) {
 	//return instance.GeneDB(assembly, v2.NewGeneDB)
-	return instance.GeneDB(assembly)
+	return instance.GtfDB(assembly)
 }
 
-func List() ([]*genome.GeneDBInfo, error) {
-	return instance.List()
+func Gtfs() ([]*genome.Annotation, error) {
+	return instance.Gtfs()
 }

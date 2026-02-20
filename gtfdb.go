@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/antonybholmes/go-basemath"
@@ -14,20 +15,22 @@ import (
 )
 
 type (
-	GeneDB struct {
+	GtfDB struct {
 		db   *sql.DB
 		file string
 		//withinGeneAndPromStmt *sql.Stmt
-		name string
+
+		annotation *Annotation
 	}
 
-	GeneDBInfo struct {
-		Genome   string `json:"genome"`
-		Assembly string `json:"assembly"`
-		Version  string `json:"version"`
-		File     string `json:"-"`
-		Id       int    `json:"-"`
-	}
+	// GtfDBInfo struct {
+	// 	PublicId string `json:"id"`
+	// 	Genome   string `json:"genome"`
+	// 	Assembly string `json:"assembly"`
+	// 	Name     string `json:"name"`
+	// 	File     string `json:"-"`
+	// 	Id       int    `json:"-"`
+	// }
 
 	GenomicFeature struct {
 		Location     *dna.Location     `json:"loc"`
@@ -63,7 +66,7 @@ type (
 )
 
 const (
-	GeneDBInfoSql = `SELECT id, genome, assembly, version, file FROM info LIMIT 1`
+	GeneDBInfoSql = `SELECT id, public_id, genome, assembly, name, file FROM info LIMIT 1`
 
 	MaxGeneInfoResults int16 = 100
 
@@ -393,14 +396,14 @@ var (
 // 	return dna.NewLocation(feature.Chr, feature.Start, feature.End)
 // }
 
-func NewGeneDB(assembly string, dir string) *GeneDB {
-	file := filepath.Join(dir, fmt.Sprintf("gtf_%s.db", assembly))
+func NewGtfDB(dir string, annotation *Annotation) *GtfDB {
+	file := filepath.Join(dir, annotation.Url)
 
 	log.Debug().Msgf("opening gene database %s", file)
 
 	db := sys.Must(sql.Open(sys.Sqlite3DB, file+sys.SqliteReadOnlySuffix)) //sys.SqliteReadOnlySuffix
 
-	return &GeneDB{name: assembly, file: file, db: db} //withinGeneStmt: sys.Must(db.Prepare(WITHIN_GENE_SQL)),
+	return &GtfDB{annotation: annotation, file: file, db: db} //withinGeneStmt: sys.Must(db.Prepare(WITHIN_GENE_SQL)),
 	//withinGeneAndPromStmt: sys.Must(db.Prepare(WITHIN_GENE_AND_PROMOTER_SQL))
 
 	//inExonStmt:      sys.Must(db.Prepare(IN_EXON_SQL)),
@@ -408,11 +411,29 @@ func NewGeneDB(assembly string, dir string) *GeneDB {
 
 }
 
-func (genedb *GeneDB) Close() error {
-	return genedb.db.Close()
+func (gtfdb *GtfDB) Close() error {
+	return gtfdb.db.Close()
 }
 
-func (genedb *GeneDB) OverlappingGenes(location *dna.Location,
+// func (gtfdb *GtfDB) LoadGeneDBInfo() (*GtfDBInfo, error) {
+
+// 	var info GtfDBInfo
+
+// 	err := gtfdb.db.QueryRow(GeneDBInfoSql).Scan(&info.Id,
+// 		&info.PublicId,
+// 		&info.Genome,
+// 		&info.Assembly,
+// 		&info.Name,
+// 		&info.File)
+
+// 	if err != nil {
+// 		return nil, err //fmt.Errorf("there was an error with the database query")
+// 	}
+
+// 	return &info, nil
+// }
+
+func (gtfdb *GtfDB) OverlappingGenes(location *dna.Location,
 	levels string,
 	prom *dna.PromoterRegion,
 	canonicalMode bool,
@@ -437,7 +458,7 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location,
 
 	log.Debug().Msgf("querying overlapping genes with sql %s", stmt)
 
-	geneRows, err = genedb.db.Query(stmt,
+	geneRows, err = gtfdb.db.Query(stmt,
 		sql.Named("chr", location.Chr()),
 		sql.Named("start", location.Start()),
 		sql.Named("end", location.End()),
@@ -473,7 +494,7 @@ func (genedb *GeneDB) OverlappingGenes(location *dna.Location,
 	return rowsToRecords(geneRows, levels, canonicalMode)
 }
 
-func (genedb *GeneDB) WithinGenes(location *dna.Location, feature string,
+func (gtfdb *GtfDB) WithinGenes(location *dna.Location, feature string,
 	prom *dna.PromoterRegion) (*GenomicFeatures, error) {
 
 	// rows, err := genedb.withinGeneStmt.Query(
@@ -485,7 +506,7 @@ func (genedb *GeneDB) WithinGenes(location *dna.Location, feature string,
 	// 	location.End(),
 	// 	location.End())
 
-	rows, err := genedb.db.Query(InGeneSql,
+	rows, err := gtfdb.db.Query(InGeneSql,
 		sql.Named("chr", location.Chr()),
 		sql.Named("mid", location.Mid()),
 		sql.Named("start", location.Start()),
@@ -502,7 +523,7 @@ func (genedb *GeneDB) WithinGenes(location *dna.Location, feature string,
 	return rowsToFeatures(location, feature, rows)
 }
 
-func (genedb *GeneDB) WithinGenesAndPromoter(location *dna.Location,
+func (gtfdb *GtfDB) WithinGenesAndPromoter(location *dna.Location,
 	levels string,
 	prom *dna.PromoterRegion) ([]*GenomicFeature, error) {
 
@@ -519,7 +540,7 @@ func (genedb *GeneDB) WithinGenesAndPromoter(location *dna.Location,
 	// 	pad,
 	// 	location.End())
 
-	rows, err := genedb.db.Query(InGeneAndPromoterSql,
+	rows, err := gtfdb.db.Query(InGeneAndPromoterSql,
 		sql.Named("chr", location.Chr()),
 		sql.Named("mid", location.Mid()),
 		sql.Named("start", location.Start()),
@@ -536,7 +557,7 @@ func (genedb *GeneDB) WithinGenesAndPromoter(location *dna.Location,
 	return rowsToRecords(rows, levels, false)
 }
 
-func (genedb *GeneDB) InExon(location *dna.Location, transcriptId string, prom *dna.PromoterRegion) ([]*GenomicFeature, error) {
+func (gtfdb *GtfDB) InExon(location *dna.Location, transcriptId string, prom *dna.PromoterRegion) ([]*GenomicFeature, error) {
 
 	// rows, err := genedb.inExonStmt.Query(
 	// 	mid,
@@ -547,7 +568,7 @@ func (genedb *GeneDB) InExon(location *dna.Location, transcriptId string, prom *
 	// 	location.End(),
 	// 	location.End())
 
-	rows, err := genedb.db.Query(InExonSql,
+	rows, err := gtfdb.db.Query(InExonSql,
 		sql.Named("transcriptId", transcriptId),
 		sql.Named("start", location.Start()),
 		sql.Named("end", location.End()),
@@ -564,7 +585,7 @@ func (genedb *GeneDB) InExon(location *dna.Location, transcriptId string, prom *
 	return rowsToRecords(rows, ExonLevel, false)
 }
 
-func (genedb *GeneDB) ClosestGenes(location *dna.Location,
+func (gtfdb *GtfDB) ClosestGenes(location *dna.Location,
 	prom *dna.PromoterRegion,
 	closestN int8) ([]*GenomicFeature, error) {
 
@@ -575,7 +596,7 @@ func (genedb *GeneDB) ClosestGenes(location *dna.Location,
 
 	// 	n)
 
-	rows, err := genedb.db.Query(ClosestGeneSql,
+	rows, err := gtfdb.db.Query(ClosestGeneSql,
 		sql.Named("chr", location.Chr()),
 		sql.Named("mid", location.Mid()),
 		sql.Named("start", location.Start()),
@@ -906,4 +927,174 @@ func MakeInExonsSql(query, table string, exons []int, namedArgs *[]any) string {
 
 	return strings.Replace(query, "<<EXONS>>", clause, 1)
 
+}
+
+// func (cache *GeneDBCache) Close() {
+// 	for _, db := range cache.cacheMap {
+// 		db.Close()
+// 	}
+// }
+
+func RowsToFeatures(location *dna.Location, level string, rows *sql.Rows) (*GenomicFeatures, error) {
+
+	//log.Debug().Msgf("rowsToFeatures %s   %d %d", location.Chr, location.Start, location.End)
+
+	// 10 seems a reasonable guess for the number of features we might see, just
+	// to reduce slice reallocation
+	features, err := RowsToRecords(rows)
+
+	if err != nil {
+		return nil, err
+	}
+
+	ret := GenomicFeatures{Location: location, Feature: level, Features: features}
+
+	return &ret, nil
+}
+
+// func (genedb *GeneDB) IdToName(id int) string {
+
+// 	name := "n/a"
+
+// 	// ignore error as it is not critical
+// 	// if the id is not found, we return "n/a"
+// 	db.QueryRow(ID_TO_NAME_SQL, id).Scan(&name)
+
+// 	return name
+// }
+
+func RowsToRecords(rows *sql.Rows) ([]*GenomicFeature, error) {
+	defer rows.Close()
+
+	var id int
+	var level string
+	var chr string
+	var start int
+	var end int
+	var strand string
+	var geneId string
+	var geneName string
+	var geneType string
+	var transcriptId string
+	var transcriptName string
+	var isCanonical bool
+	var exonNumber int
+
+	var d int
+	var err error
+
+	// 10 seems a reasonable guess for the number of features we might see, just
+	// to reduce slice reallocation
+	//var features = make([]*GenomicFeature, 0, 10)
+
+	features := make([]*GenomicFeature, 0, 10)
+
+	for rows.Next() {
+		geneId = ""
+		geneName = ""
+		transcriptId = ""
+		transcriptName = ""
+		geneType = ""
+
+		d = 0 // tss distance
+
+		err = rows.Scan(&id,
+			&level,
+			&chr,
+			&start,
+			&end,
+			&strand,
+			&geneId,
+			&geneName,
+			&geneType,
+			&isCanonical,
+			&transcriptId,
+			&transcriptName,
+			&exonNumber,
+			&d)
+
+		if err != nil {
+			return nil, err //fmt.Errorf("there was an error with the database records")
+		}
+
+		location, err := dna.NewLocation(chr, start, end)
+
+		if err != nil {
+			return nil, err
+		}
+
+		feature := GenomicFeature{
+			Feature:  level,
+			Location: location,
+			//Strand:       strand,
+			GeneId:       geneId,
+			GeneSymbol:   geneName,
+			Type:         geneType,
+			TranscriptId: transcriptId,
+			IsCanonical:  isCanonical,
+			TssDist:      d}
+
+		features = append(features, &feature)
+	}
+
+	// enforce sorted correctly by chr and then position
+	//sort.Sort(SortFeatureByPos(*features))
+
+	return features, nil
+}
+
+// SortFeaturesByPos sorts features in place by chr, start, end
+func SortFeaturesByPos(features []*GenomicFeature) {
+	slices.SortFunc(features, func(a, b *GenomicFeature) int {
+		ci := dna.ChromToInt(a.Location.Chr())
+		cj := dna.ChromToInt(b.Location.Chr())
+
+		// on different chrs so sort by chr
+		if ci != cj {
+			return int(ci) - int(cj)
+		}
+
+		// same chr so sort by position
+		if a.Location.Start() != b.Location.Start() {
+			return int(a.Location.Start()) - int(b.Location.Start())
+		}
+
+		// same start so sort by end
+		return int(a.Location.End()) - int(b.Location.End())
+	})
+}
+
+// type SortFeatureByPos []*GenomicFeature
+
+// func (features SortFeatureByPos) Len() int      { return len(features) }
+// func (features SortFeatureByPos) Swap(i, j int) { features[i], features[j] = features[j], features[i] }
+// func (features SortFeatureByPos) Less(i, j int) bool {
+// 	ci := dna.ChromToInt(features[i].Location.Chr)
+// 	cj := dna.ChromToInt(features[j].Location.Chr)
+
+// 	// on different chrs so sort by chr
+// 	if ci != cj {
+// 		return ci < cj
+// 	}
+
+// 	if features[i].Location.Start != features[j].Location.Start {
+// 		return features[i].Location.Start < features[j].Location.Start
+// 	}
+
+// 	return features[i].Location.End < features[j].Location.End
+// }
+
+func MaxLevel(levels string) string {
+	var level string
+
+	switch strings.ToLower(string(levels)) {
+	case "gene", "genes":
+		level = GeneLevel
+	case "transcript", "transcripts":
+		level = TranscriptLevel
+	default:
+		level = ExonLevel
+	}
+
+	return level
 }

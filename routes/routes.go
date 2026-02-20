@@ -23,7 +23,7 @@ import (
 type (
 	GeneQuery struct {
 		Feature  string
-		Db       *genome.GeneDB
+		Db       *genome.GtfDB
 		Assembly string
 		GeneType string // e.g. "protein_coding", "non_coding", etc.
 		// only show canonical genes
@@ -51,13 +51,13 @@ var (
 	ErrLocationCannotBeEmpty = errors.New("location cannot be empty")
 	ErrSearchTooShort        = errors.New("search too short")
 
-	genomeNormMap = map[string]string{
-		"hg19":   "gencode.v48lift37.basic.grch37",
-		"grch37": "gencode.v48lift37.basic.grch37",
-		"hg38":   "gencode.v48.basic.grch38",
-		"grch38": "gencode.v48.basic.grch38",
-		"mm10":   "gencode.vM25.basic.mm10",
-	}
+	// genomeNormMap = map[string]string{
+	// 	"hg19":   "gencode.v48lift37.basic.grch37",
+	// 	"grch37": "gencode.v48lift37.basic.grch37",
+	// 	"hg38":   "gencode.v48.basic.grch38",
+	// 	"grch38": "gencode.v48.basic.grch38",
+	// 	"mm10":   "gencode.vM25.basic.mm10",
+	// }
 )
 
 func ParseFeature(c *gin.Context) string {
@@ -101,13 +101,13 @@ func parseGeneQuery(c *gin.Context) (*GeneQuery, error) {
 		return nil, errors.New("assembly cannot be empty")
 	}
 
-	// check if assembly is valid
-	if _, ok := genomeNormMap[assembly]; !ok {
-		return nil, fmt.Errorf("invalid assembly: %s", assembly)
-	}
+	// // check if assembly is valid
+	// if _, ok := genomeNormMap[assembly]; !ok {
+	// 	return nil, fmt.Errorf("invalid assembly: %s", assembly)
+	// }
 
-	// change assembly to normalized form
-	assembly = genomeNormMap[assembly]
+	// // change assembly to normalized form
+	// assembly = genomeNormMap[assembly]
 
 	log.Debug().Msgf("using assembly: %s", assembly)
 
@@ -130,7 +130,7 @@ func parseGeneQuery(c *gin.Context) (*GeneQuery, error) {
 
 	promoterRegion := ParsePromoterRegion(c)
 
-	db, err := genomedb.GeneDB(assembly)
+	db, err := genomedb.GtfDB(assembly)
 
 	if err != nil {
 		return nil, fmt.Errorf("unable to open database for assembly %s %s", assembly, err)
@@ -162,8 +162,8 @@ func parseGeneQuery(c *gin.Context) (*GeneQuery, error) {
 // 	web.MakeDataResp(c, "", &info)
 // }
 
-func GenomesRoute(c *gin.Context) {
-	infos, err := genomedb.GetInstance().List()
+func GtfsRoute(c *gin.Context) {
+	infos, err := genomedb.Gtfs()
 
 	if err != nil {
 		c.Error(err)
@@ -330,7 +330,6 @@ func ParseGeneType(c *gin.Context) string {
 	default:
 		return ""
 	}
-
 }
 
 func ParsePromoterRegion(c *gin.Context) *dna.PromoterRegion {
@@ -382,7 +381,7 @@ func AnnotateRoute(c *gin.Context) {
 
 	output := web.ParseOutput(c)
 
-	annotationDb := genome.NewAnnotateDb(query.Db, tssRegion, int8(closestN))
+	annotationDb := genome.NewGtfAnnotateDb(query.Db, tssRegion, int8(closestN))
 
 	data := make([]*genome.GeneAnnotation, len(locations))
 

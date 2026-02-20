@@ -1,0 +1,18 @@
+[
+  {
+    "assembly": "hg19",
+    "name": "ENCODE Blacklist hg19 v2",
+    "file": "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/encode/blacklists/hg19/hg19-blacklist.v2.bed"
+  },
+
+  {
+    "assembly": "grch38",
+    "name": "ENCODE Blacklist GRCh38 v2",
+    "file": "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/encode/blacklists/grch38/hg38-blacklist.v2.bed"
+  },
+  {
+    "assembly": "mm10",
+    "name": "ENCODE Blacklist mm10 v2",
+    "file": "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/encode/blacklists/mm10/mm10-blacklist.v2.bed"
+  }
+]

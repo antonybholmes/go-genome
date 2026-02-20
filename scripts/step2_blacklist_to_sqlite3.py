@@ -7,30 +7,21 @@ Created on Thu Jun 26 10:35:40 2014
 @author: Antony Holmes
 """
 
-import sys
 import collections
-import re
-import os
-import pandas as pd
-import numpy as np
 import gzip
+import json
+import os
+import re
 import sqlite3
+import sys
 
+import numpy as np
+import pandas as pd
+import uuid_utils as uuid
 
-files = [
-    [
-        ["hg19", "ENCODE Blacklist hg19 v2"],
-        "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/encode/blacklists/hg19/hg19-blacklist.v2.bed",
-    ],
-    [
-        ["grch38", "ENCODE Blacklist GRCh38 v2"],
-        "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/encode/blacklists/grch38/hg38-blacklist.v2.bed",
-    ],
-    [
-        ["mm10", "ENCODE Blacklist mm10 v2"],
-        "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/encode/blacklists/mm10/mm10-blacklist.v2.bed",
-    ],
-]
+with open("blacklist.json", "r") as f:
+    files = json.load(f)
+
 
 REGIONS_SQL = """CREATE TABLE regions 
     (id INTEGER PRIMARY KEY ASC,
@@ -43,7 +34,7 @@ REGIONS_SQL = """CREATE TABLE regions
 for file_desc in files:
     print(file_desc)
 
-    db = f"data/modules/genome/blacklist_{file_desc[0][0]}.db"
+    db = f"../data/modules/genome/blacklist_{file_desc['assembly']}.db"
     if os.path.exists(db):
         os.remove(db)
 
@@ -62,7 +53,7 @@ for file_desc in files:
     cursor.execute("BEGIN TRANSACTION;")
 
     with open(
-        file_desc[1],
+        file_desc["file"],
         "r",
     ) as f:
         for line in f:
@@ -90,11 +81,11 @@ for file_desc in files:
     )
 
     cursor.execute(
-        f"CREATE TABLE info (id INTEGER PRIMARY KEY ASC, genome TEXT NOT NULL, version TEXT NOT NULL);",
+        f"CREATE TABLE info (id INTEGER PRIMARY KEY, public_id TEXT NOT NULL UNIQUE, genome TEXT NOT NULL UNIQUE, version TEXT NOT NULL);",
     )
 
     cursor.execute(
-        f"INSERT INTO info (genome, version) VALUES('{file_desc[0][0]}', '{file_desc[0][1]}');",
+        f"INSERT INTO info (public_id, genome, version) VALUES('{uuid.uuid7()}', '{file_desc['assembly']}', '{file_desc['name']}');",
     )
 
     cursor.execute("END TRANSACTION;")

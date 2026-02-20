@@ -29,9 +29,10 @@ with open("files.json", "r") as f:
 
 INFO_SQL = """CREATE TABLE info (id 
     INTEGER PRIMARY KEY,
+    public_id TEXT NOT NULL UNIQUE,
     genome TEXT NOT NULL DEFAULT '',
     assembly TEXT NOT NULL DEFAULT '',
-    version TEXT NOT NULL DEFAULT '',
+    name TEXT NOT NULL DEFAULT '',
     file TEXT NOT NULL DEFAULT ''
 );"""
 
@@ -140,7 +141,7 @@ for file_desc in files:
     cursor.execute(FEATURES_SQL)
 
     cursor.execute(
-        f"INSERT INTO info (genome, assembly, version, file) VALUES('{file_desc['genome']}', '{file_desc['assembly']}', '{file_desc['version']}', '{file_desc['file']}');"
+        f"INSERT INTO info (public_id, genome, assembly, name, file) VALUES('{uuid.uuid7()}', '{file_desc['genome']}', '{file_desc['assembly']}', '{file_desc['version']}', '{file_desc['file']}');"
     )
 
     cursor.execute(
@@ -370,6 +371,10 @@ for file_desc in files:
     cursor.execute("CREATE INDEX idx_genes_gene_id ON genes(gene_id);")
     cursor.execute("CREATE INDEX idx_genes_gene_symbol ON genes(gene_symbol);")
     cursor.execute("CREATE INDEX idx_genes_gene_type_id ON genes(gene_type_id);")
+    cursor.execute(
+        "CREATE INDEX idx_genes_chr_start_end_strand ON genes(chr, start, end, strand);"
+    )
+
     cursor.execute("CREATE INDEX idx_transcripts_gene_id ON transcripts(gene_id);")
     cursor.execute(
         "CREATE INDEX idx_transcripts_transcript_id ON transcripts(transcript_id);"
@@ -391,11 +396,6 @@ for file_desc in files:
 
     cursor.execute(
         "CREATE INDEX idx_features_feature_type_id_start_end ON features(feature_type_id, start, end);"
-    )
-
-    # cursor.execute("CREATE INDEX idx_genes_tss ON genes(tss);")
-    cursor.execute(
-        "CREATE INDEX idx_genes_chr_start_end_strand ON genes(chr, start, end, strand);"
     )
 
     # work out who is longest transcript per gene

@@ -46,8 +46,9 @@ type (
 	// func (a ByAbsD) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 	// func (a ByAbsD) Less(i, j int) bool { return a[i].AbsD < a[j].AbsD }
 
-	AnnotateDb struct {
-		GeneDb    *GeneDB
+	// Built on top of GtfDB to provide annotation functionality
+	GtfAnnotateDb struct {
+		GtfDB     *GtfDB
 		TSSRegion *dna.PromoterRegion
 		ClosestN  int8
 	}
@@ -66,15 +67,15 @@ const (
 	FeatureSeparator string = "|"
 )
 
-func NewAnnotateDb(genesdb *GeneDB, tssRegion *dna.PromoterRegion, closestN int8) *AnnotateDb {
-	return &AnnotateDb{
-		GeneDb:    genesdb,
+func NewGtfAnnotateDb(genesdb *GtfDB, tssRegion *dna.PromoterRegion, closestN int8) *GtfAnnotateDb {
+	return &GtfAnnotateDb{
+		GtfDB:     genesdb,
 		TSSRegion: tssRegion,
 		ClosestN:  closestN,
 	}
 }
 
-func (annotateDb *AnnotateDb) Annotate(location *dna.Location, levels string) (*GeneAnnotation, error) {
+func (annotateDb *GtfAnnotateDb) Annotate(location *dna.Location, levels string) (*GeneAnnotation, error) {
 	//mid := location.Mid()
 
 	// extend search area to account  for promoter
@@ -88,7 +89,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location, levels string) (*
 
 	level := GeneLevel
 
-	genesWithin, err := annotateDb.GeneDb.WithinGenesAndPromoter(
+	genesWithin, err := annotateDb.GtfDB.WithinGenesAndPromoter(
 		location,
 		level,
 		annotateDb.TSSRegion,
@@ -99,7 +100,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location, levels string) (*
 		return nil, err
 	}
 
-	closestGenes, err := annotateDb.GeneDb.ClosestGenes(location, annotateDb.TSSRegion, annotateDb.ClosestN)
+	closestGenes, err := annotateDb.GtfDB.ClosestGenes(location, annotateDb.TSSRegion, annotateDb.ClosestN)
 
 	if err != nil {
 		log.Error().Msgf("Error closest genes for location %s: %v", location, err)
@@ -122,7 +123,7 @@ func (annotateDb *AnnotateDb) Annotate(location *dna.Location, levels string) (*
 	return &annotation, nil
 }
 
-func (annotateDb *AnnotateDb) ClassifyFeature(location *dna.Location, feature *GenomicFeature) (string, error) {
+func (annotateDb *GtfAnnotateDb) ClassifyFeature(location *dna.Location, feature *GenomicFeature) (string, error) {
 	mid := location.Mid()
 	var start int
 
@@ -147,7 +148,7 @@ func (annotateDb *AnnotateDb) ClassifyFeature(location *dna.Location, feature *G
 	isPromoter := (feature.Location.Strand() == "+" && mid >= start && mid <= feature.Location.Start()+annotateDb.TSSRegion.Downstream()) ||
 		(feature.Location.Strand() == "-" && mid >= feature.Location.End()-annotateDb.TSSRegion.Downstream() && mid <= end)
 
-	exons, err := annotateDb.GeneDb.InExon(location, feature.TranscriptId, annotateDb.TSSRegion)
+	exons, err := annotateDb.GtfDB.InExon(location, feature.TranscriptId, annotateDb.TSSRegion)
 
 	if err != nil {
 		return "", err

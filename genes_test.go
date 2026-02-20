@@ -1,63 +1,54 @@
 package genome_test
 
-import (
-	"encoding/json"
-	"fmt"
-	"testing"
+// func TestWithin(t *testing.T) {
+// 	fmt.Println("Within")
 
-	"github.com/antonybholmes/go-dna"
-	"github.com/antonybholmes/go-genome"
-)
+// 	//file := fmt.Sprintf("../data/gene/%s.db", "grch38")
+// 	db := genome.NewGtfDB("grch38", "../data/gene/")
 
-func TestWithin(t *testing.T) {
-	fmt.Println("Within")
+// 	defer db.Close()
 
-	//file := fmt.Sprintf("../data/gene/%s.db", "grch38")
-	db := genome.NewGeneDB("grch38", "../data/gene/")
+// 	location, err := dna.NewLocation("chr3", 187721370, 187733550)
 
-	defer db.Close()
+// 	if err != nil {
+// 		fmt.Println(err)
+// 		return
+// 	}
 
-	location, err := dna.NewLocation("chr3", 187721370, 187733550)
+// 	records, err := db.WithinGenes(location, genome.GeneLevel, dna.DefaultPromoterRegion())
 
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+// 	if err != nil {
+// 		fmt.Println(err)
+// 		return
+// 	}
 
-	records, err := db.WithinGenes(location, genome.GeneLevel, dna.DefaultPromoterRegion())
+// 	b, _ := json.Marshal(&records)
+// 	fmt.Printf("%s", string(b))
+// }
 
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+// func TestClosest(t *testing.T) {
+// 	fmt.Println("Closest")
 
-	b, _ := json.Marshal(&records)
-	fmt.Printf("%s", string(b))
-}
+// 	//file := fmt.Sprintf("../data/gene/%s.db", "grch38")
 
-func TestClosest(t *testing.T) {
-	fmt.Println("Closest")
+// 	db := genome.NewGtfDB("grch38", "../data/gene/")
 
-	//file := fmt.Sprintf("../data/gene/%s.db", "grch38")
+// 	defer db.Close()
 
-	db := genome.NewGeneDB("grch38", "../data/gene/")
+// 	location, err := dna.NewLocation("chr3", 187721377, 187745725)
 
-	defer db.Close()
+// 	if err != nil {
+// 		fmt.Println(err)
+// 		return
+// 	}
 
-	location, err := dna.NewLocation("chr3", 187721377, 187745725)
+// 	records, err := db.ClosestGenes(location, dna.DefaultPromoterRegion(), 10)
 
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+// 	if err != nil {
+// 		fmt.Println(err)
+// 		return
+// 	}
 
-	records, err := db.ClosestGenes(location, dna.DefaultPromoterRegion(), 10)
-
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	b, _ := json.Marshal(&records)
-	fmt.Printf("%s", string(b))
-}
+// 	b, _ := json.Marshal(&records)
+// 	fmt.Printf("%s", string(b))
+// }

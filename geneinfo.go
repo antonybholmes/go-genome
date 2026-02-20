@@ -91,7 +91,7 @@ const (
 		WHERE g.rank < :n`
 )
 
-func (genedb *GeneDB) SearchByName(search string,
+func (gtfdb *GtfDB) SearchByName(search string,
 	level string,
 	fuzzyMode bool,
 	canonicalMode bool,
@@ -111,27 +111,27 @@ func (genedb *GeneDB) SearchByName(search string,
 
 	switch level {
 	case "transcript":
-		return genedb.searchTranscripts(search,
+		return gtfdb.searchTranscripts(search,
 			canonicalMode,
 			false,
 			n)
 
 	case "exon":
-		return genedb.searchTranscripts(search,
+		return gtfdb.searchTranscripts(search,
 			canonicalMode,
 			true,
 			n)
 
 	default:
 		log.Debug().Msgf("searching for genes with term %s", search)
-		return genedb.searchGenes(search, n)
+		return gtfdb.searchGenes(search, n)
 	}
 
 }
 
 // Searching for exons or transcripts uses essentially
 // the same pipeline so combine into one method.
-func (genedb *GeneDB) searchTranscripts(search string,
+func (gtfdb *GtfDB) searchTranscripts(search string,
 	canonicalMode bool,
 	exonMode bool,
 	n int16) ([]*GenomicFeature, error) {
@@ -153,7 +153,7 @@ func (genedb *GeneDB) searchTranscripts(search string,
 
 	//log.Debug().Msgf("SQL: %s %s %d", sqlStmt, search, n)
 
-	rows, err := genedb.db.Query(sqlStmt,
+	rows, err := gtfdb.db.Query(sqlStmt,
 		sql.Named("q", search),
 		sql.Named("n", n))
 
@@ -172,7 +172,7 @@ func (genedb *GeneDB) searchTranscripts(search string,
 
 }
 
-func (genedb *GeneDB) searchGenes(search string,
+func (gtfdb *GtfDB) searchGenes(search string,
 	n int16) ([]*GenomicFeature, error) {
 	n = max(1, min(n, MaxGeneInfoResults))
 
@@ -181,7 +181,7 @@ func (genedb *GeneDB) searchGenes(search string,
 
 	//log.Debug().Msgf("SQL: %s %s %d", sqlStmt, search, n)
 
-	rows, err := genedb.db.Query(GeneInfoSql,
+	rows, err := gtfdb.db.Query(GeneInfoSql,
 		sql.Named("q", search),
 		sql.Named("n", n))
 

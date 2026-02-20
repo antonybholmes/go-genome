@@ -1,0 +1,19 @@
+[
+  {
+    "assembly": "hg19",
+    "name": "UCSC Centromere hg19 v2",
+    "file": "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/scripts/python/gal/assets/human/hg19/ucsc_centromeres_hg19.bed"
+  },
+
+  {
+    "assembly": "grch38",
+    "name": "UCSC Centromere GRCh38 v2",
+    "file": "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/scripts/python/gal/assets/human/grch38/ucsc_centromeres.bed"
+  },
+
+  {
+    "assembly": "mm10",
+    "name": "UCSC Centromere mm10 v2",
+    "file": "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/scripts/python/gal/assets/mouse/mm10/centromeres.bed"
+  }
+]

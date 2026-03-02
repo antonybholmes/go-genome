@@ -1,6 +1,6 @@
 module github.com/antonybholmes/go-genome
 
-go 1.25
+go 1.25.0
 
 replace github.com/antonybholmes/go-basemath => ../go-basemath
 
@@ -17,8 +17,8 @@ require github.com/antonybholmes/go-dna v0.0.0-20260220203430-f58fff3f7a19
 require (
 	github.com/antonybholmes/go-math v0.0.0-20251211184815-6e7285b975dd
 	github.com/antonybholmes/go-sys v0.0.0-20260216173437-1755a134eb0d
-	github.com/antonybholmes/go-web v0.0.0-20260224185041-42ccb858f60c
-	github.com/gin-gonic/gin v1.11.0
+	github.com/antonybholmes/go-web v0.0.0-20260224235031-ec2ea3e12c26
+	github.com/gin-gonic/gin v1.12.0
 )
 
 require (
@@ -52,12 +52,13 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
 	github.com/xuri/efp v0.0.1 // indirect
-	github.com/xuri/excelize/v2 v2.10.0 // indirect
+	github.com/xuri/excelize/v2 v2.10.1 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
+	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	golang.org/x/arch v0.24.0 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/exp v0.0.0-20260112195511-716be5621a96 // indirect
-	golang.org/x/net v0.50.0 // indirect
+	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect

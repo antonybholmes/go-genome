@@ -12,12 +12,12 @@ replace github.com/antonybholmes/go-web => ../go-web
 
 require github.com/antonybholmes/go-basemath v0.0.0-20260204001030-d512600734fa
 
-require github.com/antonybholmes/go-dna v0.0.0-20260220203430-f58fff3f7a19
+require github.com/antonybholmes/go-dna v0.0.0-20260302203000-6aa894cd8cd9
 
 require (
 	github.com/antonybholmes/go-math v0.0.0-20251211184815-6e7285b975dd
-	github.com/antonybholmes/go-sys v0.0.0-20260216173437-1755a134eb0d
-	github.com/antonybholmes/go-web v0.0.0-20260224235031-ec2ea3e12c26
+	github.com/antonybholmes/go-sys v0.0.0-20260302215512-25fe845a717e
+	github.com/antonybholmes/go-web v0.0.0-20260302203001-1755b56a0073
 	github.com/gin-gonic/gin v1.12.0
 )
 
@@ -55,11 +55,11 @@ require (
 	github.com/xuri/excelize/v2 v2.10.1 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
-	golang.org/x/arch v0.24.0 // indirect
+	golang.org/x/arch v0.25.0 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/exp v0.0.0-20260112195511-716be5621a96 // indirect
 	golang.org/x/net v0.51.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect

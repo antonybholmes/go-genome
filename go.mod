@@ -1,6 +1,6 @@
 module github.com/antonybholmes/go-genome
 
-go 1.25.0
+go 1.26
 
 replace github.com/antonybholmes/go-basemath => ../go-basemath
 
@@ -10,14 +10,14 @@ replace github.com/antonybholmes/go-dna => ../go-dna
 
 replace github.com/antonybholmes/go-web => ../go-web
 
-require github.com/antonybholmes/go-basemath v0.0.0-20260313220641-74ea9151950a
+require github.com/antonybholmes/go-basemath v0.0.0-20260414211833-d03296b3071e
 
-require github.com/antonybholmes/go-dna v0.0.0-20260403172902-c96bf99098ff
+require github.com/antonybholmes/go-dna v0.0.0-20260414211827-1ac7ff2467b6
 
 require (
 	github.com/antonybholmes/go-math v0.0.0-20251211184815-6e7285b975dd
-	github.com/antonybholmes/go-sys v0.0.0-20260403172913-edaeb305202e
-	github.com/antonybholmes/go-web v0.0.0-20260403172903-f845fdd34082
+	github.com/antonybholmes/go-sys v0.0.0-20260414211834-526fb62c6da0
+	github.com/antonybholmes/go-web v0.0.0-20260414211828-e0b24128d77c
 	github.com/gin-gonic/gin v1.12.0
 )
 
@@ -47,14 +47,14 @@ require (
 	github.com/quic-go/quic-go v0.59.0 // indirect
 	github.com/richardlehane/mscfb v1.0.6 // indirect
 	github.com/richardlehane/msoleps v1.0.6 // indirect
-	github.com/rs/zerolog v1.35.0 // indirect
+	github.com/rs/zerolog v1.35.1 // indirect
 	github.com/tiendc/go-deepcopy v1.7.2 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
 	github.com/xuri/efp v0.0.1 // indirect
 	github.com/xuri/excelize/v2 v2.10.1 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
-	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
+	go.mongodb.org/mongo-driver/v2 v2.5.1 // indirect
 	golang.org/x/arch v0.26.0 // indirect
 	golang.org/x/crypto v0.50.0 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect

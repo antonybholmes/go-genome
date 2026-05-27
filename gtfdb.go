@@ -11,6 +11,7 @@ import (
 	"github.com/antonybholmes/go-dna"
 
 	"github.com/antonybholmes/go-sys"
+	"github.com/antonybholmes/go-sys/db"
 	"github.com/antonybholmes/go-sys/log"
 )
 
@@ -264,7 +265,7 @@ func NewGtfDB(dir string, annotation *Annotation) *GtfDB {
 
 	log.Debug().Msgf("opening gene database %s", file)
 
-	db := sys.Must(sql.Open(sys.Sqlite3DB, file+sys.SqliteReadOnlySuffix)) //sys.SqliteReadOnlySuffix
+	db := sys.Must(sql.Open(db.Sqlite3DB, file+db.SqliteReadOnlySuffix)) //sys.SqliteReadOnlySuffix
 
 	return &GtfDB{annotation: annotation, file: file, db: db} //withinGeneStmt: sys.Must(db.Prepare(WITHIN_GENE_SQL)),
 	//withinGeneAndPromStmt: sys.Must(db.Prepare(WITHIN_GENE_AND_PROMOTER_SQL))

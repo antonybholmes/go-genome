@@ -10,6 +10,7 @@ import (
 	"github.com/antonybholmes/go-sys"
 	"github.com/antonybholmes/go-web"
 
+	"github.com/antonybholmes/go-sys/db"
 	"github.com/antonybholmes/go-sys/log"
 )
 
@@ -175,12 +176,12 @@ func NewGenomeDB(dir string) *GenomeDB {
 
 	// defer db.Close()
 
-	return &GenomeDB{dir: dir, db: sys.Must(sql.Open(sys.Sqlite3DB, filepath.Join(dir, "genome.db"+sys.SqliteReadOnlySuffix)))}
+	return &GenomeDB{dir: dir, db: sys.Must(sql.Open(db.Sqlite3DB, filepath.Join(dir, "genome.db"+db.SqliteReadOnlySuffix)))}
 }
 
-func (gdb *GenomeDB) Genomes() ([]*sys.Entity, error) {
+func (gdb *GenomeDB) Genomes() ([]*db.Entity, error) {
 
-	genomes := make([]*sys.Entity, 0, 10)
+	genomes := make([]*db.Entity, 0, 10)
 
 	rows, err := gdb.db.Query(GenomesSQL)
 
@@ -191,7 +192,7 @@ func (gdb *GenomeDB) Genomes() ([]*sys.Entity, error) {
 	defer rows.Close()
 
 	for rows.Next() {
-		var genome sys.Entity
+		var genome db.Entity
 
 		err := rows.Scan(&genome.Id, &genome.PublicId, &genome.Name)
 
@@ -205,9 +206,9 @@ func (gdb *GenomeDB) Genomes() ([]*sys.Entity, error) {
 	return genomes, nil
 }
 
-func (gdb *GenomeDB) Assemblies(genome string) ([]*sys.Entity, error) {
+func (gdb *GenomeDB) Assemblies(genome string) ([]*db.Entity, error) {
 
-	assemblies := make([]*sys.Entity, 0, 10)
+	assemblies := make([]*db.Entity, 0, 10)
 
 	rows, err := gdb.db.Query(AssembliesSql, sql.Named("genome", web.FormatParam(genome)))
 
@@ -218,7 +219,7 @@ func (gdb *GenomeDB) Assemblies(genome string) ([]*sys.Entity, error) {
 	defer rows.Close()
 
 	for rows.Next() {
-		var assembly sys.Entity
+		var assembly db.Entity
 
 		err := rows.Scan(&assembly.Id, &assembly.PublicId, &assembly.Name)
 

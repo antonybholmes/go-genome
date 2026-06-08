@@ -37,15 +37,15 @@ type (
 	}
 
 	GenomicFeature struct {
-		PublicId     string        `json:"id,omitempty"`
-		Location     *dna.Location `json:"loc"`
-		Type         string        `json:"type,omitempty"`
-		Biotype      string        `json:"biotype,omitempty"`
-		GeneId       string        `json:"geneId,omitempty"`
-		GeneSymbol   string        `json:"geneSymbol,omitempty"`
-		TranscriptId string        `json:"transcriptId,omitempty"`
-		ExonId       string        `json:"exonId,omitempty"`
-		Label        string        `json:"label,omitempty"`
+		PublicId   string        `json:"id,omitempty"`
+		Location   *dna.Location `json:"loc"`
+		Type       string        `json:"type,omitempty"`
+		Biotype    string        `json:"biotype,omitempty"`
+		GeneId     string        `json:"geneId,omitempty"`
+		Symbol     string        `json:"symbol,omitempty"`
+		Transcript string        `json:"transcript,omitempty"`
+		Exon       string        `json:"exon,omitempty"`
+		Label      string        `json:"label,omitempty"`
 
 		Children []*GenomicFeature `json:"children,omitempty"`
 		//Utrs         []*GenomicFeature `json:"utrs,omitempty"`
@@ -100,12 +100,12 @@ const (
 
 	BasicLocationSql = `SELECT DISTINCT
 		g.id, 
-		g.chr,
+		c.name AS chr,
 		g.start, 
 		g.end, 
 		g.strand, 
 		g.gene_id, 
-		g.gene_symbol,
+		g.symbol,
 		gt.name AS gene_biotype,
 		t.transcript_id,
 		t.start,
@@ -118,6 +118,7 @@ const (
 		e.exon_id,
 		e.exon_number
 		FROM genes as g
+		JOIN chromosomes AS c ON g.chr_id = c.id
 		JOIN transcripts AS t ON g.id = t.gene_id
 		JOIN features AS f ON f.transcript_id = t.id
 		JOIN feature_types AS ft ON f.feature_type_id = ft.id
@@ -126,12 +127,12 @@ const (
 
 	CoreLocationSql = `SELECT DISTINCT
 		g.id, 
-		g.chr,
+		c.name AS chr,
 		g.start, 
 		g.end, 
 		g.strand, 
 		g.gene_id, 
-		g.gene_symbol,
+		g.symbol,
 		gt.name AS gene_biotype,
 		t.transcript_id,
 		t.start,
@@ -153,6 +154,7 @@ const (
 		:start <= f.end AND :end >= f.start AS in_exon,
 		:start <= t.end AND :end >= t.start AS is_intragenic
 		FROM genes as g
+		JOIN chromosomes AS c ON g.chr_id = c.id
 		JOIN transcripts AS t ON g.id = t.gene_id
 		JOIN features AS f ON f.transcript_id = t.id
 		JOIN feature_types AS ft ON f.feature_type_id = ft.id
@@ -182,7 +184,7 @@ const (
 		ORDER BY u.id, u.start`
 
 	InGeneAndPromoterSql = CoreLocationSql +
-		` WHERE g.chr = :chr AND 
+		` WHERE c.name = :chr AND 
 		(
 			((:start <= t.end) AND (:end >= t.start - :prom5p) AND g.strand = '+') OR
 			((:start <= t.end + :prom5p) AND (:end >= t.start) AND g.strand = '-')
@@ -190,15 +192,17 @@ const (
 		ORDER BY g.gene_id, t.transcript_id, e.exon_number`
 
 	InGeneSql = CoreLocationSql +
-		` WHERE g.chr = :chr AND (:start <= t.end AND :end >= t.start)`
+		` WHERE c.name = :chr AND (:start <= t.end AND :end >= t.start)`
 
 	ClosestGeneSql = CoreLocationSql +
 		` WHERE 
 			t.transcript_id IN (
 				SELECT DISTINCT t.transcript_id
 				FROM transcripts AS t
+				JOIN genes AS g ON t.gene_id = g.id
+				JOIN chromosomes AS c ON g.chr_id = c.id
 				WHERE 
-					g.chr = :chr AND
+					c.name = :chr AND
 					t.is_longest = 1
 				ORDER BY ABS(
 					CASE 
@@ -220,7 +224,7 @@ const (
 	// so that exons come before cds and cds come before utrs, which is important for building the gene structure in memory
 	BasicOverlapSql = BasicLocationSql +
 		` WHERE 
-			g.chr = :chr AND (t.start <= :end AND t.end >= :start)
+			c.name = :chr AND (t.start <= :end AND t.end >= :start)
 			AND (:biotype = '' OR LOWER(gt.name) = :biotype)
 		ORDER BY 
 			g.gene_id,
@@ -231,7 +235,7 @@ const (
 
 	OverlapSql = CoreLocationSql +
 		` WHERE 
-			g.chr = :chr AND (t.start <= :end AND t.end >= :start)
+			c.name = :chr AND (t.start <= :end AND t.end >= :start)
 			AND (:biotype = '' OR LOWER(gt.name) = :biotype)
 		ORDER BY 
 			g.gene_id,
@@ -352,7 +356,7 @@ func (gtfdb *GtfDB) OverlappingGenes(location *dna.Location,
 	// 	e.end,
 	// 	g.strand,
 	// 	g.gene_id,
-	// 	g.gene_symbol,
+	// 	g.symbol,
 	// 	gt.name as gene_type,
 	// 	t.transcript_id,
 	// 	t.is_canonical,
@@ -659,10 +663,10 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool, annotation
 			}
 
 			currentGene = &GenomicFeature{Id: gid,
-				Location:   location,
-				Type:       GeneLevel,
-				GeneSymbol: geneSymbol,
-				GeneId:     geneId,
+				Location: location,
+				Type:     GeneLevel,
+				Symbol:   geneSymbol,
+				GeneId:   geneId,
 				//Strand:   strand,
 				Biotype: geneBiotype,
 
@@ -695,7 +699,7 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool, annotation
 		// also only add if we have a current gene
 		// also only add if we don't already have this transcript
 		if strings.Contains(levels, "transcript") &&
-			(currentTranscript == nil || currentTranscript.TranscriptId != transcriptId) &&
+			(currentTranscript == nil || currentTranscript.Transcript != transcriptId) &&
 			(!canonicalMode || isCanonical) {
 
 			location, err := dna.NewStrandedLocation(chr, transcriptStart, transcriptEnd, strand)
@@ -708,10 +712,10 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool, annotation
 			currentTranscript = &GenomicFeature{Id: gid,
 				Location: location,
 				//Strand:       strand,
-				Type:         TranscriptLevel,
-				GeneSymbol:   geneSymbol,
-				GeneId:       geneId,
-				TranscriptId: transcriptId,
+				Type:       TranscriptLevel,
+				Symbol:     geneSymbol,
+				GeneId:     geneId,
+				Transcript: transcriptId,
 				//Biotype:      transcriptBiotype,
 				IsCanonical: isCanonical,
 				IsLongest:   isLongest,
@@ -760,13 +764,13 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool, annotation
 			}
 
 			currentFeature = &GenomicFeature{Id: gid,
-				Location:     location,
-				Type:         featureType,
-				GeneSymbol:   geneSymbol,
-				GeneId:       geneId,
-				TranscriptId: transcriptId,
-				ExonId:       exonId,
-				ExonNumber:   exonNumber,
+				Location:   location,
+				Type:       featureType,
+				Symbol:     geneSymbol,
+				GeneId:     geneId,
+				Transcript: transcriptId,
+				Exon:       exonId,
+				ExonNumber: exonNumber,
 				//InPromoter:   inPromoter,
 
 				//Label:  MakePromLabel(inPromoter, inExon, isIntragenic),

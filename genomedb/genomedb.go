@@ -11,10 +11,10 @@ var (
 	once     sync.Once
 )
 
-func InitCache(dir string) *genome.GenomeDB {
+func InitCache(path string) *genome.GenomeDB {
 	once.Do(func() {
 		//instance = genome.NewGeneDBCache(dir, v2.NewGeneDB)
-		instance = genome.NewGenomeDB(dir)
+		instance = genome.NewGenomeDB(path)
 	})
 
 	return instance

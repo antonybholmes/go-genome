@@ -18,6 +18,6 @@
     "assembly": "mm10",
     "version": "gencode.vM25.basic.mm10",
     "description": "Gencode mm10 vM25",
-    "file": "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/gencode/mm10/gencode.vM25.basic.annotation.gtf.gz"
+    "file": "/ifs/archive/cancer/Lab_RDF/scratch_Lab_RDF/ngs/references/gencode/mouse/mm10/gencode.vM25.basic.annotation.gtf.gz"
   }
 ]

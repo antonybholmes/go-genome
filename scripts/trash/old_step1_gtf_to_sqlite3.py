@@ -7,14 +7,14 @@ Created on Thu Jun 26 10:35:40 2014
 @author: Antony Holmes
 """
 
-import sys
 import collections
-import re
-import os
-import pandas as pd
-import numpy as np
 import gzip
+import os
+import re
+import sys
 
+import numpy as np
+import pandas as pd
 
 tables = ["genes"]
 
@@ -48,7 +48,7 @@ GENES_SQL = """CREATE TABLE genes
     tss INTEGER NOT NULL, 
     strand TEXT NOT NULL, 
     gene_id TEXT NOT NULL DEFAULT "", 
-    gene_symbol TEXT NOT NULL DEFAULT "", 
+    symbol TEXT NOT NULL DEFAULT "", 
     transcript_id TEXT NOT NULL DEFAULT "", 
     exon_id TEXT NOT NULL DEFAULT "", 
     is_canonical INTEGER NOT NULL DEFAULT 0, 
@@ -121,7 +121,7 @@ for file_desc in files:
         print(f"CREATE INDEX genes_gene_id_idx ON genes (gene_id);", file=out)
 
         print(
-            f"CREATE INDEX genes_gene_symbol_idx ON genes (gene_symbol);",
+            f"CREATE INDEX genes_symbol_idx ON genes (symbol);",
             file=out,
         )
 
@@ -335,7 +335,7 @@ for file_desc in files:
                 # gene_type = id_map.get(gene_type, 1)
 
                 print(
-                    f"INSERT INTO genes (parent_id, level, chr, start, end, tss, strand, gene_id, gene_symbol, transcript_id, exon_id, is_canonical, gene_type) VALUES ({parent_record_id}, {level_map[level]}, '{chr}', {start}, {end}, {stranded_start}, '{strand}', {gene_id}, {gene_name}, {transcript_id}, {exon_id}, {is_canonical}, {gene_type});",
+                    f"INSERT INTO genes (parent_id, level, chr, start, end, tss, strand, gene_id, symbol, transcript_id, exon_id, is_canonical, gene_type) VALUES ({parent_record_id}, {level_map[level]}, '{chr}', {start}, {end}, {stranded_start}, '{strand}', {gene_id}, {gene_name}, {transcript_id}, {exon_id}, {is_canonical}, {gene_type});",
                     file=out,
                 )
 

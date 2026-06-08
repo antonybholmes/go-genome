@@ -4,6 +4,7 @@ Encode read counts per base in 2 bytes
 
 @author: Antony Holmes
 """
+
 import argparse
 import os
 import sqlite3
@@ -19,7 +20,7 @@ dir = args.dir  # sys.argv[1]
 data = []
 
 
-db = os.path.join(dir, "genome.db")
+db = os.path.join(dir, "genomes.v20260608.db")
 
 
 if os.path.exists(db):
@@ -137,8 +138,7 @@ cursor.execute(
     f"INSERT INTO annotation_types (id, public_id, name) VALUES (1, '{uuid.uuid7()}', 'GTF');"
 )
 
-cursor.execute(
-    f""" CREATE TABLE annotations (
+cursor.execute(f""" CREATE TABLE annotations (
 	id INTEGER PRIMARY KEY,
     public_id TEXT NOT NULL UNIQUE,
     assembly_id INTEGER NOT NULL,
@@ -150,8 +150,7 @@ cursor.execute(
     FOREIGN KEY (assembly_id) REFERENCES assemblies(id),
     FOREIGN KEY (annotation_type_id) REFERENCES annotation_types(id)
 );
-"""
-)
+""")
 
 type_map = {
     "gtf": 1,
@@ -161,8 +160,8 @@ for root, dirs, files in os.walk(dir):
     if "trash" in root:
         continue
 
-    for filename in files:
-        if "gtf" in filename and filename.endswith(".db"):
+    for filename in sorted(files):
+        if "gtf" in filename and filename.endswith(".db") and ".v2026" in filename:
             # relative_dir = root.replace(dir, "")[1:]
 
             # genome, platform, dataset = relative_dir.split("/")
@@ -202,10 +201,8 @@ for root, dirs, files in os.walk(dir):
             conn2.close()
 
 
-cursor.execute(
-    f""" CREATE INDEX idx_annotations_name ON annotations (LOWER(name));
-"""
-)
+cursor.execute(f""" CREATE INDEX idx_annotations_name ON annotations (LOWER(name));
+""")
 
 cursor.execute(
     f""" CREATE INDEX idx_annotations_assembly_id ON annotations (assembly_id);

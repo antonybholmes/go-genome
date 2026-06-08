@@ -3,9 +3,8 @@ package genome
 import (
 	"database/sql"
 	"errors"
-	"strings"
-
 	"path/filepath"
+	"strings"
 
 	"github.com/antonybholmes/go-sys"
 	"github.com/antonybholmes/go-web"
@@ -20,8 +19,9 @@ type (
 	//string string
 
 	GenomeDB struct {
-		db  *sql.DB
-		dir string
+		db   *sql.DB
+		dir  string
+		path string
 	}
 
 	// GeneDB interface {
@@ -98,34 +98,18 @@ const (
 			(am.public_id = :assembly OR LOWER(aa.alias) = :assembly)
 		ORDER BY a.name`
 
-	GtfsSql = `SELECT DISTINCT
+	GtfsSql = `SELECT
 		a.id,
 		a.public_id,
-		a.genome,
-		a.assembly,
-		a.type,
-		a.name,
+		g.name AS genome,
+		asm.name AS assembly,
+		'GTF' AS type,
+		a.name as name,
 		a.url
-		FROM (
-			SELECT
-			a.id,
-			a.public_id,
-			g.name AS genome,
-			asm.name AS assembly,
-			at.name AS type,
-			a.name,
-			a.url,
-			ROW_NUMBER() OVER (PARTITION BY asm.name ORDER BY a.id DESC) AS rank
-			FROM annotations a
-			JOIN assemblies asm ON a.assembly_id = asm.id
-			JOIN genomes g ON asm.genome_id = g.id
-			JOIN annotation_types at ON a.annotation_type_id = at.id
-			JOIN assembly_aliases aa ON asm.id = aa.assembly_id
-			WHERE
-				at.name = 'GTF'
-		) a
-		WHERE a.rank = 1
-		ORDER BY a.genome, a.name`
+		FROM annotations a
+		JOIN assemblies asm ON a.assembly_id = asm.id
+		JOIN genomes g ON asm.genome_id = g.id
+		ORDER BY asm.id`
 
 	AnnotationsFromIdSql = `SELECT DISTINCT
 		a.id,
@@ -166,7 +150,7 @@ const (
 // 	return dna.NewLocation(feature.Chr, feature.Start, feature.End)
 // }
 
-func NewGenomeDB(dir string) *GenomeDB {
+func NewGenomeDB(dbPath string) *GenomeDB {
 
 	// db, err := sql.Open("sqlite3", path)
 
@@ -176,7 +160,12 @@ func NewGenomeDB(dir string) *GenomeDB {
 
 	// defer db.Close()
 
-	return &GenomeDB{dir: dir, db: sys.Must(sql.Open(db.Sqlite3DB, filepath.Join(dir, "genome.db"+db.SqliteReadOnlySuffix)))}
+	log.Debug().Msgf("initialising genome db with %s", dbPath)
+
+	dir := filepath.Dir(dbPath)
+
+	return &GenomeDB{dir: dir, path: dbPath, db: sys.Must(sql.Open(db.Sqlite3DB, dbPath+db.SqliteReadOnlySuffix))}
+
 }
 
 func (gdb *GenomeDB) Genomes() ([]*db.Entity, error) {

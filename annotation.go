@@ -148,7 +148,7 @@ func (annotateDb *GtfAnnotateDb) ClassifyFeature(location *dna.Location, feature
 	isPromoter := (feature.Location.Strand() == "+" && mid >= start && mid <= feature.Location.Start()+annotateDb.TSSRegion.Downstream()) ||
 		(feature.Location.Strand() == "-" && mid >= feature.Location.End()-annotateDb.TSSRegion.Downstream() && mid <= end)
 
-	exons, err := annotateDb.GtfDB.InExon(location, feature.TranscriptId, annotateDb.TSSRegion)
+	exons, err := annotateDb.GtfDB.InExon(location, feature.Transcript, annotateDb.TSSRegion)
 
 	if err != nil {
 		return "", err

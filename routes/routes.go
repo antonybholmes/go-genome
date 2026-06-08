@@ -137,7 +137,6 @@ func parseQuery(c *gin.Context, param string) (*GeneQuery, error) {
 	var err error
 
 	if param == "assembly" {
-
 		db, err = genomedb.GtfFromAssembly(id)
 	} else {
 		db, err = genomedb.GtfFromId(id)
@@ -421,7 +420,7 @@ func AnnotateRoute(c *gin.Context) {
 	// limit amount of data returned per request to 1000 entries at a time
 	locations = locations[0:basemath.Min(len(locations), MaxAnnotations)]
 
-	query, err := parseQuery(c, "assembly")
+	query, err := parseQuery(c, "id")
 
 	if err != nil {
 		c.Error(err)
@@ -515,7 +514,7 @@ func MakeGeneTable(
 
 		for i, gene := range annotation.WithinGenes {
 			geneIds[i] = gene.GeneId
-			geneNames[i] = gene.GeneSymbol
+			geneNames[i] = gene.Symbol
 			promLabels[i] = gene.Label
 			tssDists[i] = strconv.Itoa(gene.TssDist)
 
@@ -529,7 +528,7 @@ func MakeGeneTable(
 
 		for _, closestGene := range annotation.ClosestGenes {
 			row = append(row, closestGene.GeneId)
-			row = append(row, genome.GeneWithStrandLabel(closestGene.GeneSymbol, closestGene.Location.Strand()))
+			row = append(row, genome.GeneWithStrandLabel(closestGene.Symbol, closestGene.Location.Strand()))
 			row = append(row, closestGene.Label)
 			row = append(row, strconv.Itoa(closestGene.TssDist))
 			//row = append(row, closestGene.Location.String())

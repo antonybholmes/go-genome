@@ -32,6 +32,7 @@ INFO_SQL = """CREATE TABLE info (id
     public_id TEXT NOT NULL UNIQUE,
     genome TEXT NOT NULL DEFAULT '',
     assembly TEXT NOT NULL DEFAULT '',
+    version TEXT NOT NULL DEFAULT '',
     name TEXT NOT NULL DEFAULT '',
     file TEXT NOT NULL DEFAULT ''
 );"""
@@ -41,16 +42,23 @@ BIOTYPES_SQL = """CREATE TABLE biotypes (
     public_id TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL UNIQUE);"""
 
+CHROMOSOMES_SQL = """CREATE TABLE chromosomes (
+    id INTEGER PRIMARY KEY,
+    public_id TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL UNIQUE);"""
+
 GENES_SQL = """CREATE TABLE genes (
     id INTEGER PRIMARY KEY,
+    public_id TEXT NOT NULL UNIQUE,
     biotype_id INT NOT NULL,
     gene_id TEXT NOT NULL DEFAULT '',
-    gene_symbol TEXT NOT NULL DEFAULT '',
-    chr TEXT NOT NULL DEFAULT 'chr1',
+    symbol TEXT NOT NULL DEFAULT '',
+    chr_id INT NOT NULL DEFAULT 1,
     start INT NOT NULL DEFAULT 1,
     end INT NOT NULL DEFAULT 1,
     strand TEXT NOT NULL DEFAULT '+',
-    FOREIGN KEY (biotype_id) REFERENCES biotypes(id)
+    FOREIGN KEY (biotype_id) REFERENCES biotypes(id),
+    FOREIGN KEY (chr_id) REFERENCES chromosomes(id)
 );"""
 
 # TRANSCRIPT_TYPES_SQL = """CREATE TABLE transcript_types (
@@ -60,6 +68,7 @@ GENES_SQL = """CREATE TABLE genes (
 
 TRANSCRIPTS_SQL = """CREATE TABLE transcripts (
     id INTEGER PRIMARY KEY,
+    public_id TEXT NOT NULL UNIQUE,
     gene_id INT NOT NULL,
     biotype_id INT NOT NULL,
     transcript_id TEXT NOT NULL DEFAULT '',
@@ -84,6 +93,10 @@ FEATURE_TYPES_SQL = """CREATE TABLE feature_types (
     name TEXT NOT NULL UNIQUE);"""
 
 
+# exons are ids which we associate with features,
+# where a feature can be an exon, cds, utr, start codon or stop codon
+# this is because the same exon can be associated with multiple features,
+# e.g. an exon can be both an exon and a cds, or an exon and a utr
 EXONS_SQL = """CREATE TABLE exons (
     id INTEGER PRIMARY KEY,
     transcript_id INT NOT NULL,
@@ -116,12 +129,17 @@ feature_type_map = {
     "three_prime_utr": 7,
 }
 
+# get year month day
+version = "20260608"
+
 for file_desc in files:
     print(file_desc)
 
-    db = f"../data/modules/genome/gtf_{file_desc['version']}.db"
+    db = f"../data/modules/genome/gtf_{file_desc['version']}.v{version}.db"
     if os.path.exists(db):
         os.remove(db)
+
+    chromosome_map = {}
 
     # Connect to the SQLite database
     conn = sqlite3.connect(db)
@@ -132,16 +150,76 @@ for file_desc in files:
 
     cursor.execute(INFO_SQL)
     cursor.execute(BIOTYPES_SQL)
-    # cursor.execute(TRANSCRIPT_TYPES_SQL)
+    cursor.execute("CREATE UNIQUE INDEX idx_info_public_id ON info(public_id);")
+    cursor.execute("CREATE UNIQUE INDEX idx_biotypes_name ON biotypes(LOWER(name));")
+
+    cursor.execute(CHROMOSOMES_SQL)
+    cursor.execute(
+        "CREATE UNIQUE INDEX idx_chromosomes_public_id ON chromosomes(public_id);"
+    )
+    cursor.execute(
+        "CREATE UNIQUE INDEX idx_chromosomes_name ON chromosomes(LOWER(name));"
+    )
+
     cursor.execute(GENES_SQL)
+    cursor.execute("CREATE UNIQUE INDEX idx_genes_public_id ON genes(public_id);")
+    cursor.execute("CREATE INDEX idx_genes_gene_id ON genes(LOWER(gene_id));")
+    cursor.execute("CREATE INDEX idx_genes_symbol ON genes(LOWER(symbol));")
+    cursor.execute("CREATE INDEX idx_genes_chr_id ON genes(chr_id);")
+    cursor.execute("CREATE INDEX idx_genes_biotype_id ON genes(biotype_id);")
+
     cursor.execute(TRANSCRIPTS_SQL)
+    cursor.execute(
+        "CREATE UNIQUE INDEX idx_transcripts_public_id ON transcripts(public_id);"
+    )
+    cursor.execute(
+        "CREATE INDEX idx_transcripts_transcript_id ON transcripts(LOWER(transcript_id));"
+    )
+    cursor.execute("CREATE INDEX idx_transcripts_start_end ON transcripts(start, end);")
+    cursor.execute(
+        "CREATE INDEX idx_transcripts_is_canonical ON transcripts(is_canonical);"
+    )
+    cursor.execute(
+        "CREATE INDEX idx_transcripts_is_longest ON transcripts(is_longest);"
+    )
+    cursor.execute("CREATE INDEX idx_transcripts_gene_id ON transcripts(gene_id);")
+    cursor.execute(
+        "CREATE INDEX idx_transcripts_biotype_id ON transcripts(biotype_id);"
+    )
+
     # cursor.execute(EXONS_IDS_SQL)
     cursor.execute(FEATURE_TYPES_SQL)
+    cursor.execute(
+        "CREATE UNIQUE INDEX idx_feature_types_public_id ON feature_types(public_id);"
+    )
+    cursor.execute(
+        "CREATE UNIQUE INDEX idx_feature_types_name ON feature_types(LOWER(name));"
+    )
+
     cursor.execute(EXONS_SQL)
+    cursor.execute("CREATE INDEX idx_exons_exon_id ON exons(LOWER(exon_id));")
+    cursor.execute("CREATE INDEX idx_exons_transcript_id ON exons(transcript_id);")
+
     cursor.execute(FEATURES_SQL)
+    cursor.execute("CREATE INDEX idx_features_start_end ON features(start, end);")
+    cursor.execute(
+        "CREATE INDEX idx_features_transcript_id ON features(transcript_id);"
+    )
+    cursor.execute("CREATE INDEX idx_features_exon_id ON features(exon_id);")
+    cursor.execute(
+        "CREATE INDEX idx_features_feature_type_id ON features(feature_type_id);"
+    )
 
     cursor.execute(
-        f"INSERT INTO info (public_id, genome, assembly, name, file) VALUES('{uuid.uuid7()}', '{file_desc['genome']}', '{file_desc['assembly']}', '{file_desc['version']}', '{file_desc['file']}');"
+        f"INSERT INTO info (public_id, genome, assembly, name, version, file) VALUES(?, ?, ?, ?, ?, ?)",
+        (
+            str(uuid.uuid7()),
+            file_desc["genome"],
+            file_desc["assembly"],
+            file_desc["version"],
+            version,
+            file_desc["file"],
+        ),
     )
 
     cursor.execute(
@@ -189,6 +267,7 @@ for file_desc in files:
     stranded_start = 0
     stranded_end = 0
 
+    chr_map = {}
     gene_map = {}
 
     exon_map = {}
@@ -302,6 +381,21 @@ for file_desc in files:
                 )
 
             chr = tokens[0]
+
+            if chr not in chr_map:
+                chr_map[chr] = len(chr_map) + 1
+
+                cursor.execute(
+                    "INSERT INTO chromosomes (id, public_id, name) VALUES (?, ?, ?)",
+                    (
+                        chr_map[chr],
+                        str(uuid.uuid7()),
+                        chr,
+                    ),
+                )
+
+            chr_id = chr_map[chr]
+
             start = int(tokens[3])
             end = int(tokens[4])
             # mid = int((end + start) / 2)
@@ -320,12 +414,13 @@ for file_desc in files:
             if level == "gene":
 
                 cursor.execute(
-                    "INSERT INTO genes (id, gene_id, gene_symbol, chr, start, end, strand, biotype_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+                    "INSERT INTO genes (id, public_id, gene_id, symbol, chr_id, start, end, strand, biotype_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
                     (
                         gene_map[gene_id],
+                        str(uuid.uuid7()),
                         gene_id,
                         gene_name,
-                        chr,
+                        chr_id,
                         start,
                         end,
                         strand,
@@ -336,9 +431,10 @@ for file_desc in files:
             elif level == "transcript":
 
                 cursor.execute(
-                    "INSERT INTO transcripts (id, gene_id, transcript_id, start, end, is_canonical, biotype_id) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+                    "INSERT INTO transcripts (id, public_id, gene_id, transcript_id, start, end, is_canonical, biotype_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
                     (
                         transcript_map[transcript_id],
+                        str(uuid.uuid7()),
                         gene_map[gene_id],
                         transcript_id,
                         start,
@@ -375,38 +471,6 @@ for file_desc in files:
 
             record += 1
 
-    cursor.execute("CREATE INDEX idx_biotypes_name ON biotypes(LOWER(name));")
-
-    cursor.execute("CREATE INDEX idx_genes_gene_id ON genes(LOWER(gene_id));")
-    cursor.execute("CREATE INDEX idx_genes_gene_symbol ON genes(LOWER(gene_symbol));")
-    cursor.execute("CREATE INDEX idx_genes_biotype_id ON genes(biotype_id);")
-    cursor.execute(
-        "CREATE INDEX idx_genes_chr_start_end_strand ON genes(chr, start, end, strand);"
-    )
-
-    cursor.execute("CREATE INDEX idx_transcripts_gene_id ON transcripts(gene_id);")
-    cursor.execute(
-        "CREATE INDEX idx_transcripts_transcript_id ON transcripts(LOWER(transcript_id));"
-    )
-    cursor.execute(
-        "CREATE INDEX idx_transcripts_biotype_id ON transcripts(biotype_id);"
-    )
-    cursor.execute("CREATE INDEX idx_transcripts_start_end ON transcripts(start, end);")
-    cursor.execute(
-        "CREATE INDEX idx_transcripts_is_canonical ON transcripts(is_canonical);"
-    )
-    cursor.execute(
-        "CREATE INDEX idx_transcripts_is_longest ON transcripts(is_longest);"
-    )
-
-    cursor.execute("CREATE INDEX idx_exons_exon_id ON exons(exon_id);")
-
-    cursor.execute("CREATE INDEX idx_exons_transcript_id ON exons(transcript_id);")
-
-    cursor.execute(
-        "CREATE INDEX idx_features_feature_type_id_start_end ON features(feature_type_id, start, end);"
-    )
-
     # work out who is longest transcript per gene
     print("Finding longest transcripts...")
 
@@ -438,7 +502,41 @@ for file_desc in files:
         queries,
     )
 
-    print(len(queries), "transcripts to set as longest")
+    print(len(queries), "transcripts set as longest")
+
+    # if not canonical, set longest as canonical
+    print("Finding longest transcripts to make canonical...")
+
+    cursor.execute(
+        f"""
+        WITH max_lengths AS (
+            SELECT 
+                t.gene_id,
+                t.transcript_id,
+                ROW_NUMBER() OVER (PARTITION BY t.gene_id ORDER BY ABS(t.end - t.start) DESC) AS rank
+            FROM transcripts t
+            WHERE t.is_canonical = 0
+        )
+        SELECT gene_id, transcript_id FROM max_lengths
+        WHERE rank = 1
+        ORDER BY gene_id, transcript_id;
+        """,
+    )
+
+    rows = cursor.fetchall()
+
+    queries = []
+
+    for row in rows:
+        # print(row)
+        queries.append({"gene_id": row[0], "transcript_id": row[1]})
+
+    cursor.executemany(
+        "UPDATE transcripts SET is_canonical = 1 WHERE gene_id = :gene_id AND transcript_id = :transcript_id",
+        queries,
+    )
+
+    print(len(queries), "transcripts set as canonical")
 
     # Commit and close
     conn.commit()

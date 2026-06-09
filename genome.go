@@ -81,34 +81,36 @@ const (
 		WHERE g.public_id = :genome OR LOWER(g.name) = :genome
 		ORDER BY a.name`
 
-	AnnotationsSql = `SELECT DISTINCT
-		a.id,
-		a.public_id,
-		g.name AS genome,
-		asm.name AS assembly,
-		at.name AS type,
-		a.name,
-		a.url,
-		FROM annotations a
-		JOIN assemblies asm ON a.assembly_id = asm.id
-		JOIN genomes g ON asm.genome_id = g.id
-		JOIN annotation_types at ON a.annotation_type_id = at.id
-		JOIN assembly_aliases aa ON asm.id = aa.assembly_id
-		WHERE 
-			(am.public_id = :assembly OR LOWER(aa.alias) = :assembly)
-		ORDER BY a.name`
+	// AnnotationsSql = `SELECT DISTINCT
+	// 	a.id,
+	// 	a.public_id,
+	// 	g.name AS genome,
+	// 	asm.name AS assembly,
+	// 	at.name AS type,
+	// 	a.name,
+	// 	a.url,
+	// 	FROM annotations a
+	// 	JOIN assemblies asm ON a.assembly_id = asm.id
+	// 	JOIN genomes g ON asm.genome_id = g.id
+	// 	JOIN annotation_types at ON a.annotation_type_id = at.id
+	// 	JOIN assembly_aliases aa ON asm.id = aa.assembly_id
+	// 	WHERE
+	// 		(a.public_id = :id OR LOWER(aa.name) = LOWER(:id))
+	// 	ORDER BY a.name`
 
 	GtfsSql = `SELECT
 		a.id,
 		a.public_id,
 		g.name AS genome,
 		asm.name AS assembly,
-		'GTF' AS type,
+		at.name AS type,
 		a.name as name,
 		a.url
 		FROM annotations a
 		JOIN assemblies asm ON a.assembly_id = asm.id
 		JOIN genomes g ON asm.genome_id = g.id
+		JOIN annotation_types at ON a.annotation_type_id = at.id
+		WHERE LOWER(at.name) = 'gtf'
 		ORDER BY asm.id`
 
 	AnnotationsFromIdSql = `SELECT DISTINCT
@@ -125,7 +127,7 @@ const (
 		JOIN annotation_types at ON a.annotation_type_id = at.id
 		JOIN assembly_aliases aa ON asm.id = aa.assembly_id
 		WHERE
-			a.public_id = :id`
+			a.public_id = :id OR LOWER(aa.name) = LOWER(:id)`
 
 	AnnotationsByTypeSql = `SELECT DISTINCT
 		a.id,
@@ -142,7 +144,7 @@ const (
 		JOIN assembly_aliases aa ON asm.id = aa.assembly_id
 		WHERE
 			LOWER(at.name) = :type
-			AND (asm.public_id = :assembly OR LOWER(aa.alias) = :assembly)
+			AND (asm.public_id = :assembly OR LOWER(aa.name) = LOWER(:assembly))
 		ORDER BY a.id DESC`
 )
 
@@ -401,6 +403,19 @@ func (gdb *GenomeDB) Gtfs() ([]*Annotation, error) {
 	}
 
 	return ret, nil
+}
+
+// Normalise assembly names, e.g. grch37 -> hg19 so that
+// users can use either name and get the same result
+func NormaliseAssembly(assembly string) string {
+
+	assembly = strings.ToLower(assembly)
+
+	if assembly == "grch37" {
+		return "hg19"
+	}
+
+	return assembly
 }
 
 // func NewGeneDBCache(dir string) *GenomeDB {

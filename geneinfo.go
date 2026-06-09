@@ -17,17 +17,18 @@ import (
 
 const (
 	GeneInfoSql = `SELECT DISTINCT
-			g.id, 
-			g.chr,
-			g.start, 
-			g.end, 
-			g.strand, 
-			g.gene_id, 
-			g.symbol,
-			gt.name AS biotype
+		g.id, 
+		c.name AS chr,
+		g.start, 
+		g.end, 
+		g.strand, 
+		g.gene_id, 
+		g.symbol,
+		gt.name AS biotype
 	FROM genes as g
 	JOIN biotypes AS gt ON g.biotype_id = gt.id
-	WHERE (g.symbol LIKE :q OR g.gene_id LIKE :q)
+	JOIN chromosomes AS c ON g.chr_id = c.id
+	WHERE (g.symbol LIKE :symbol OR g.gene_id = :q)
 	ORDER BY g.symbol
 	LIMIT :n`
 
@@ -35,7 +36,7 @@ const (
 		FROM(
 			SELECT DISTINCT
 				g.id, 
-				g.chr,
+				c.name AS chr,
 				g.start, 
 				g.end, 
 				g.strand, 
@@ -51,6 +52,7 @@ const (
 			FROM genes as g
 			JOIN transcripts AS t ON g.id = t.gene_id
 			JOIN biotypes AS gt ON g.biotype_id = gt.id
+			JOIN chromosomes AS c ON g.chr_id = c.id
 			WHERE (g.symbol LIKE :q OR g.gene_id LIKE :q OR t.transcript_id LIKE :q) 
 				<<CANONICAL>>
 			ORDER BY g.symbol
@@ -61,7 +63,7 @@ const (
 		FROM(
 			SELECT DISTINCT
 				g.id, 
-				g.chr,
+				c.name AS chr,
 				g.start, 
 				g.end, 
 				g.strand, 
@@ -82,6 +84,7 @@ const (
 			JOIN transcripts AS t ON g.id = t.gene_id
 			JOIN exons AS e ON e.transcript_id = t.id
 			JOIN biotypes AS gt ON g.biotype_id = gt.id
+			JOIN chromosomes AS c ON g.chr_id = c.id
 			WHERE (g.symbol LIKE :q OR g.gene_id LIKE :q OR t.transcript_id LIKE :q OR e.exon_id LIKE :q) 
 				<<CANONICAL>>
 			ORDER BY g.symbol
@@ -89,7 +92,7 @@ const (
 		WHERE g.rank < :n`
 )
 
-func (gtfdb *GtfDB) SearchByName(search string,
+func (gdb *GtfDB) SearchByName(search string,
 	level string,
 	canonicalMode bool,
 	n int16) ([]*GenomicFeature, error) {
@@ -107,25 +110,25 @@ func (gtfdb *GtfDB) SearchByName(search string,
 
 	switch level {
 	case "transcript":
-		return gtfdb.searchTranscripts(search,
+		return gdb.searchTranscripts(search,
 			canonicalMode,
 			false,
 			n)
 
 	case "exon":
-		return gtfdb.searchTranscripts(search,
+		return gdb.searchTranscripts(search,
 			canonicalMode,
 			true,
 			n)
 	default:
-		return gtfdb.searchGenes(search, n)
+		return gdb.searchGenes(search, n)
 	}
 
 }
 
 // Searching for exons or transcripts uses essentially
 // the same pipeline so combine into one method.
-func (gtfdb *GtfDB) searchTranscripts(search string,
+func (gdb *GtfDB) searchTranscripts(search string,
 	canonicalMode bool,
 	exonMode bool,
 	n int16) ([]*GenomicFeature, error) {
@@ -147,7 +150,7 @@ func (gtfdb *GtfDB) searchTranscripts(search string,
 
 	//log.Debug().Msgf("SQL: %s %s %d", sqlStmt, search, n)
 
-	rows, err := gtfdb.db.Query(sqlStmt,
+	rows, err := gdb.db.Query(sqlStmt,
 		sql.Named("q", search),
 		sql.Named("n", n))
 
@@ -165,12 +168,15 @@ func (gtfdb *GtfDB) searchTranscripts(search string,
 
 }
 
-func (gtfdb *GtfDB) searchGenes(search string,
+func (gdb *GtfDB) searchGenes(search string,
 	n int16) ([]*GenomicFeature, error) {
 	n = max(1, min(n, MaxGeneInfoResults))
 
-	rows, err := gtfdb.db.Query(GeneInfoSql,
+	log.Debug().Msgf("searching for gene: %s, n: %d, SQL: %s", search, n, GeneInfoSql)
+
+	rows, err := gdb.db.Query(GeneInfoSql,
 		sql.Named("q", search),
+		sql.Named("symbol", search+"%"),
 		sql.Named("n", n))
 
 	if err != nil {

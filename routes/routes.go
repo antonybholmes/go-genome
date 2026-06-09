@@ -104,6 +104,8 @@ func parseQuery(c *gin.Context, param string) (*GeneQuery, error) {
 		return nil, errors.New("assembly cannot be empty")
 	}
 
+	id = genome.NormaliseAssembly(id)
+
 	// // check if assembly is valid
 	// if _, ok := genomeNormMap[assembly]; !ok {
 	// 	return nil, fmt.Errorf("invalid assembly: %s", assembly)
@@ -111,8 +113,6 @@ func parseQuery(c *gin.Context, param string) (*GeneQuery, error) {
 
 	// // change assembly to normalized form
 	// assembly = genomeNormMap[assembly]
-
-	log.Debug().Msgf("using assembly: %s", id)
 
 	//dbFile := genomeToFileMap[assembly]
 
@@ -133,14 +133,14 @@ func parseQuery(c *gin.Context, param string) (*GeneQuery, error) {
 
 	promoterRegion := ParsePromoterRegion(c)
 
-	var db *genome.GtfDB
-	var err error
+	//var db *genome.GtfDB
+	//var err error
 
-	if param == "assembly" {
-		db, err = genomedb.GtfFromAssembly(id)
-	} else {
-		db, err = genomedb.GtfFromId(id)
-	}
+	//if param == "assembly" {
+	//	db, err = genomedb.GtfFromAssembly(id)
+	//} else {
+	db, err := genomedb.GtfFromId(id)
+	//}
 
 	if err != nil {
 		return nil, fmt.Errorf("unable to open database for assembly %s %s", id, err)
@@ -156,22 +156,6 @@ func parseQuery(c *gin.Context, param string) (*GeneQuery, error) {
 			Promoter:  promoterRegion},
 		nil
 }
-
-// func GeneDBInfoRoute(c *gin.Context) {
-// 	query, err := ParseGeneQuery(c, c.Param("assembly"))
-
-// 	if err != nil {
-// 		return web.ErrorReq(err)
-// 	}
-
-// 	info, _ := query.Db.GeneDBInfo()
-
-// 	// if err != nil {
-// 	// 	return web.ErrorReq(err)
-// 	// }
-
-// 	web.MakeDataResp(c, "", &info)
-// }
 
 func GtfsRoute(c *gin.Context) {
 	infos, err := genomedb.Gtfs()
@@ -204,8 +188,6 @@ func OverlappingGenesRoute(c *gin.Context) {
 	}
 
 	ret := make([]*GenesResp, 0, len(locations))
-
-	log.Debug().Msgf("querying for %d locations ", len(locations))
 
 	for _, location := range locations {
 		features, err := query.Db.OverlappingGenes(location,
@@ -250,15 +232,10 @@ func SearchForGenesByAssemblyRoute(c *gin.Context) {
 
 	canonical := strings.HasPrefix(strings.ToLower(c.Query("canonical")), "t")
 
-	log.Debug().Msgf("searching for gene: %s, canonical: %v, type: %s",
-		search, canonical, query.Biotype)
-
 	features, _ := query.Db.SearchByName(search,
 		query.Feature,
 		canonical,
 		int16(n))
-
-	log.Debug().Msgf("found %d features", len(features))
 
 	// if err != nil {
 	// 	return web.ErrorReq(err)
@@ -270,14 +247,12 @@ func SearchForGenesByAssemblyRoute(c *gin.Context) {
 // Search for genes using a specific gtf database. Preferable
 // as slightly faster lookup.
 func SearchForGenesRoute(c *gin.Context) {
-	search := c.Query("q") // dnaroutes.ParseLocationsFromPost(c)
+	search := c.Query("q")
 
 	if search == "" {
 		web.BadReqResp(c, ErrSearchTooShort)
 		return
 	}
-
-	//fuzzyMode := c.Query("mode") == "fuzzy"
 
 	n := web.ParseN(c, 20)
 
@@ -290,15 +265,10 @@ func SearchForGenesRoute(c *gin.Context) {
 
 	canonical := strings.HasPrefix(strings.ToLower(c.Query("canonical")), "t")
 
-	log.Debug().Msgf("searching for gene: %s,  canonical: %v, type: %s",
-		search, canonical, query.Biotype)
-
 	features, _ := query.Db.SearchByName(search,
 		query.Feature,
 		canonical,
 		int16(n))
-
-	log.Debug().Msgf("found %d features", len(features))
 
 	// if err != nil {
 	// 	return web.ErrorReq(err)
@@ -459,8 +429,7 @@ func AnnotateRoute(c *gin.Context) {
 
 		c.String(http.StatusOK, tsv)
 	} else {
-
-		c.JSON(http.StatusOK, AnnotationResponse{Status: http.StatusOK, Data: data})
+		web.MakeDataResp(c, "", &data)
 	}
 }
 

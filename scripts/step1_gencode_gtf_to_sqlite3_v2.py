@@ -165,6 +165,7 @@ for file_desc in files:
     cursor.execute("CREATE UNIQUE INDEX idx_genes_public_id ON genes(public_id);")
     cursor.execute("CREATE INDEX idx_genes_gene_id ON genes(LOWER(gene_id));")
     cursor.execute("CREATE INDEX idx_genes_symbol ON genes(LOWER(symbol));")
+    cursor.execute("CREATE INDEX idx_genes_strand ON genes(strand);")
     cursor.execute("CREATE INDEX idx_genes_chr_id ON genes(chr_id);")
     cursor.execute("CREATE INDEX idx_genes_biotype_id ON genes(biotype_id);")
 

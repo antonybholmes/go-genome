@@ -63,8 +63,6 @@ cursor.execute(
     """,
 )
 
-cursor.execute("CREATE INDEX idx_assemblies_name_id ON assemblies(LOWER(name));")
-cursor.execute("CREATE INDEX idx_assemblies_genome_id ON assemblies(genome_id);")
 
 cursor.execute(
     f"INSERT INTO assemblies (id, public_id, genome_id, name) VALUES (1, '{uuid.uuid7()}', 1, 'GRCh37');"
@@ -85,29 +83,29 @@ cursor.execute(
     CREATE TABLE assembly_aliases (
         id INTEGER PRIMARY KEY,
         assembly_id INTEGER NOT NULL,
-        alias TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL UNIQUE,
         FOREIGN KEY (assembly_id) REFERENCES assemblies(id) ON DELETE CASCADE);
     """,
 )
 
-cursor.execute(f"INSERT INTO assembly_aliases (assembly_id, alias) VALUES (1, 'hg19');")
+cursor.execute(f"INSERT INTO assembly_aliases (assembly_id, name) VALUES (1, 'hg19');")
 cursor.execute(
-    f"INSERT INTO assembly_aliases (assembly_id, alias) VALUES (1, 'GRCh37');"
+    f"INSERT INTO assembly_aliases (assembly_id, name) VALUES (1, 'GRCh37');"
 )
 
-cursor.execute(f"INSERT INTO assembly_aliases (assembly_id, alias) VALUES (2, 'hg38');")
+cursor.execute(f"INSERT INTO assembly_aliases (assembly_id, name) VALUES (2, 'hg38');")
 cursor.execute(
-    f"INSERT INTO assembly_aliases (assembly_id, alias) VALUES (2, 'GRCh38');"
+    f"INSERT INTO assembly_aliases (assembly_id, name) VALUES (2, 'GRCh38');"
 )
 
-cursor.execute(f"INSERT INTO assembly_aliases (assembly_id, alias) VALUES (3, 'mm10');")
+cursor.execute(f"INSERT INTO assembly_aliases (assembly_id, name) VALUES (3, 'mm10');")
 cursor.execute(
-    f"INSERT INTO assembly_aliases (assembly_id, alias) VALUES (3, 'GRCm38');"
+    f"INSERT INTO assembly_aliases (assembly_id, name) VALUES (3, 'GRCm38');"
 )
 
-cursor.execute(f"INSERT INTO assembly_aliases (assembly_id, alias) VALUES (4, 'mm39');")
+cursor.execute(f"INSERT INTO assembly_aliases (assembly_id, name) VALUES (4, 'mm39');")
 cursor.execute(
-    f"INSERT INTO assembly_aliases (assembly_id, alias) VALUES (4, 'GRCm39');"
+    f"INSERT INTO assembly_aliases (assembly_id, name) VALUES (4, 'GRCm39');"
 )
 
 
@@ -209,13 +207,31 @@ cursor.execute(
 """
 )
 
+cursor.execute(f""" CREATE INDEX idx_genomes_name ON genomes (LOWER(name));
+""")
+cursor.execute(
+    f""" CREATE INDEX idx_genomes_scientific_name ON genomes (LOWER(scientific_name));
+"""
+)
+
+cursor.execute(f""" CREATE INDEX idx_assemblies_name ON assemblies (LOWER(name));
+""")
+cursor.execute(f""" CREATE INDEX idx_assemblies_genome_id ON assemblies (genome_id);
+""")
+
+
 cursor.execute(
     f""" CREATE INDEX idx_annotations_annotation_type_id ON annotations (annotation_type_id);
 """
 )
 
 cursor.execute(
-    f""" CREATE INDEX idx_assembly_aliases_alias ON assembly_aliases (LOWER(alias));
+    f""" CREATE INDEX idx_assembly_aliases_name ON assembly_aliases (LOWER(name));
+"""
+)
+
+cursor.execute(
+    f""" CREATE INDEX idx_assembly_aliases_assembly_id ON assembly_aliases (assembly_id);
 """
 )
 

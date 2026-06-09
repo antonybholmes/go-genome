@@ -104,7 +104,7 @@ func parseQuery(c *gin.Context, param string) (*GeneQuery, error) {
 		return nil, errors.New("assembly cannot be empty")
 	}
 
-	id = genome.NormaliseAssembly(id)
+	id = genome.NormalizeAssembly(id)
 
 	// // check if assembly is valid
 	// if _, ok := genomeNormMap[assembly]; !ok {

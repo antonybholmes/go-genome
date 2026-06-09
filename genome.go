@@ -405,14 +405,14 @@ func (gdb *GenomeDB) Gtfs() ([]*Annotation, error) {
 	return ret, nil
 }
 
-// Normalise assembly names, e.g. grch37 -> hg19 so that
+// Normalize assembly names, e.g. grch37 -> hg19 so that
 // users can use either name and get the same result
-func NormaliseAssembly(assembly string) string {
+func NormalizeAssembly(assembly string) string {
 
-	assembly = strings.ToLower(assembly)
+	assembly = web.FormatParam(assembly)
 
 	if assembly == "grch37" {
-		return "hg19"
+		assembly = "hg19"
 	}
 
 	return assembly

@@ -144,18 +144,18 @@ const (
 			WHEN g.strand = '+' THEN :mid - t.start
 			ELSE :mid - t.end
 		END AS tss_dist,
-		((:start <= t.start + :prom3p) AND (:end >= t.start - :prom5p) AND (g.strand = '+')) OR
-			((:start <= t.end + :prom5p) AND (:end >= t.end - :prom3p) AND (g.strand = '-')) 
+		((g.strand = '+') AND (:start <= t.start + :prom3p) AND (:end >= t.start - :prom5p)) OR
+			((g.strand = '-') AND (:start <= t.end + :prom5p) AND (:end >= t.end - :prom3p)) 
 		AS in_promoter,
 		:start <= f.end AND :end >= f.start AS in_exon,
 		:start <= t.end AND :end >= t.start AS is_intragenic
-		FROM genes as g
-		JOIN chromosomes AS c ON g.chr_id = c.id
-		JOIN transcripts AS t ON g.id = t.gene_id
-		JOIN features AS f ON f.transcript_id = t.id
-		JOIN feature_types AS ft ON f.feature_type_id = ft.id
-		JOIN exons AS e ON f.exon_id = e.id
-		JOIN biotypes AS gt ON g.biotype_id = gt.id`
+	FROM genes as g
+	JOIN chromosomes AS c ON g.chr_id = c.id
+	JOIN transcripts AS t ON g.id = t.gene_id
+	JOIN features AS f ON f.transcript_id = t.id
+	JOIN feature_types AS ft ON f.feature_type_id = ft.id
+	JOIN exons AS e ON f.exon_id = e.id
+	JOIN biotypes AS gt ON g.biotype_id = gt.id`
 
 	CdsSql = `SELECT DISTINCT
 		e.id,
@@ -179,65 +179,100 @@ const (
 			<<EXONS>>
 		ORDER BY u.id, u.start`
 
-	InGeneAndPromoterSql = CoreLocationSql +
+	IntragenicSql = CoreLocationSql +
 		` WHERE c.name = :chr AND 
 		(
-			((:start <= t.end) AND (:end >= t.start - :prom5p) AND g.strand = '+') OR
-			((:start <= t.end + :prom5p) AND (:end >= t.start) AND g.strand = '-')
-		)
+			(g.strand = '+' AND (:start <= t.end) AND (:end >= t.start - :prom5p)) OR
+			(g.strand = '-' AND (:start <= t.end + :prom5p) AND (:end >= t.start))
+		) AND
+		g.official_gene_id IS NOT NULL
 		ORDER BY g.gene_id, t.transcript_id, e.exon_number`
 
 	InGeneSql = CoreLocationSql +
 		` WHERE c.name = :chr AND (:start <= t.end AND :end >= t.start)`
 
-	ClosestGeneSql = CoreLocationSql +
-		` WHERE 
-			t.id IN (
-				WITH ranked_transcripts AS (
-					SELECT 
-						g.id as gene_id,
-						t.id AS transcript_id,
+	ClosestGeneSql = `WITH ranked_transcripts AS 
+		(
+			SELECT DISTINCT
+				g.id as gene_id,
+				t.id AS transcript_id,
+				ABS(
+					CASE 
+						WHEN g.strand ='+' THEN :mid - t.start
+						ELSE :mid - t.end
+					END
+				) as tss_dist,
+				-- Rank transcripts within the SAME gene by closest distance
+				ROW_NUMBER() OVER (
+					PARTITION BY t.gene_id 
+					ORDER BY 
 						ABS(
 							CASE 
 								WHEN g.strand ='+' THEN :mid - t.start
 								ELSE :mid - t.end
 							END
-						) as tss_dist,
-						-- Rank transcripts within the SAME gene by closest distance
-						ROW_NUMBER() OVER (
-							PARTITION BY t.gene_id 
-							ORDER BY 
-								ABS(
-									CASE 
-										WHEN g.strand ='+' THEN :mid - t.start
-										ELSE :mid - t.end
-									END
-								) ASC
-						) AS gene_transcript_rank
-					FROM transcripts AS t
-					JOIN genes AS g ON t.gene_id = g.id
-					JOIN chromosomes AS c ON g.chr_id = c.id
-					JOIN biotypes AS gt ON g.biotype_id = gt.id
-					WHERE 
-						c.name = :chr AND
-						-- avoid annotating to genes with an ENSG symbol as these are likely to be less well characterized 
-						g.symbol NOT LIKE 'ENSG%' AND
-						LOWER(gt.name) IN ('protein_coding')
-						
-				)
-				-- get the ids of the closest transcripts for the closest genes
-				SELECT
-					transcript_id
-				FROM 
-					ranked_transcripts
-				WHERE
-					gene_transcript_rank = 1
-				ORDER BY 
-					tss_dist ASC
-				LIMIT 
-					:n	
-			)
-		ORDER BY ABS(tss_dist)`
+						) ASC
+				) AS gene_transcript_rank
+			FROM transcripts AS t
+			JOIN genes AS g ON t.gene_id = g.id
+			JOIN chromosomes AS c ON g.chr_id = c.id
+			WHERE 
+				c.name = :chr AND
+				-- avoid annotating to genes with an ENSG symbol as these are likely to be less well characterized 
+				g.official_gene_id IS NOT NULL
+		),
+		closest_transcripts AS (
+			-- get the ids of the closest transcripts for the closest genes
+			SELECT DISTINCT
+				ROW_NUMBER() OVER (ORDER BY tss_dist ASC) AS rank,
+				transcript_id
+			FROM 
+				ranked_transcripts
+			WHERE
+				gene_transcript_rank = 1
+			ORDER BY 
+				tss_dist ASC
+			LIMIT 
+				:n	
+		)
+		SELECT DISTINCT
+			g.id, 
+			c.name AS chr,
+			g.start, 
+			g.end, 
+			g.strand, 
+			g.gene_id, 
+			g.symbol,
+			gt.name AS gene_biotype,
+			t.transcript_id,
+			t.start,
+			t.end,
+			t.is_canonical,
+			t.is_longest,
+			ft.name AS feature_type,
+			f.start,
+			f.end,
+			e.exon_id,
+			e.exon_number,
+			CASE
+				WHEN g.strand = '+' THEN :mid - t.start
+				ELSE :mid - t.end
+			END AS tss_dist,
+			((g.strand = '+') AND (:start <= t.start + :prom3p) AND (:end >= t.start - :prom5p)) OR
+				((g.strand = '-') AND (:start <= t.end + :prom5p) AND (:end >= t.end - :prom3p)) 
+			AS in_promoter,
+			:start <= f.end AND :end >= f.start AS in_exon,
+			:start <= t.end AND :end >= t.start AS is_intragenic
+		FROM genes as g
+		JOIN chromosomes AS c ON g.chr_id = c.id
+		JOIN transcripts AS t ON g.id = t.gene_id
+		JOIN closest_transcripts ct ON ct.transcript_id = t.id
+		JOIN features AS f ON f.transcript_id = t.id
+		JOIN feature_types AS ft ON f.feature_type_id = ft.id
+		JOIN exons AS e ON f.exon_id = e.id
+		JOIN biotypes AS gt ON g.biotype_id = gt.id
+		ORDER BY 
+			ct.rank ASC`
 
 	// when annotating genes, see if position falls within an exon
 	InExonSql = CoreLocationSql +
@@ -438,7 +473,7 @@ func (gdb *GtfDB) WithinGenesAndPromoter(location *dna.Location,
 	// 	pad,
 	// 	location.End())
 
-	rows, err := gdb.db.Query(InGeneAndPromoterSql,
+	rows, err := gdb.db.Query(IntragenicSql,
 		sql.Named("chr", location.Chr()),
 		sql.Named("mid", location.Mid()),
 		sql.Named("start", location.Start()),

@@ -52,11 +52,13 @@ GENES_SQL = """CREATE TABLE genes (
     public_id TEXT NOT NULL UNIQUE,
     biotype_id INT NOT NULL,
     gene_id TEXT NOT NULL DEFAULT '',
+    official_gene_id TEXT,
     symbol TEXT NOT NULL DEFAULT '',
     chr_id INT NOT NULL DEFAULT 1,
     start INT NOT NULL DEFAULT 1,
     end INT NOT NULL DEFAULT 1,
-    strand TEXT NOT NULL DEFAULT '+',
+    strand TEXT NOT NULL DEFAULT '.',
+     
     FOREIGN KEY (biotype_id) REFERENCES biotypes(id),
     FOREIGN KEY (chr_id) REFERENCES chromosomes(id)
 );"""
@@ -164,6 +166,9 @@ for file_desc in files:
     cursor.execute(GENES_SQL)
     cursor.execute("CREATE UNIQUE INDEX idx_genes_public_id ON genes(public_id);")
     cursor.execute("CREATE INDEX idx_genes_gene_id ON genes(LOWER(gene_id));")
+    cursor.execute(
+        "CREATE INDEX idx_genes_official_gene_id ON genes(LOWER(official_gene_id));"
+    )
     cursor.execute("CREATE INDEX idx_genes_symbol ON genes(LOWER(symbol));")
     cursor.execute("CREATE INDEX idx_genes_strand ON genes(strand);")
     cursor.execute("CREATE INDEX idx_genes_chr_id ON genes(chr_id);")
@@ -257,7 +262,8 @@ for file_desc in files:
     record = 1
 
     gene_id = ""
-    gene_name = ""
+    official_gene_id = ""
+    symbol = ""
     gene_biotype = ""
     transcript_id = ""
     transcript_biotype = ""
@@ -316,7 +322,20 @@ for file_desc in files:
             matcher = re.search(r'gene_name "(.+?)";', tokens[8])
 
             if matcher:
-                gene_name = matcher.group(1)
+                symbol = matcher.group(1)
+                is_ensg = 1 if symbol.startswith("ENSG") else 0
+
+            # assume it doesn't have an official id
+            official_gene_id = None
+
+            if file_desc["genome"] == "Human":
+                matcher = re.search(r'hgnc_id "(.+?)";', tokens[8])
+            else:
+                matcher = re.search(r'mgi_id "(.+?)";', tokens[8])
+
+            if matcher:
+                official_gene_id = matcher.group(1)
+                tags.add(f"official_gene_id:{official_gene_id}")
 
             # gene_type
             gene_biotype = "NA"
@@ -413,14 +432,14 @@ for file_desc in files:
             tag_str = ",".join(sorted(tags))
 
             if level == "gene":
-
                 cursor.execute(
-                    "INSERT INTO genes (id, public_id, gene_id, symbol, chr_id, start, end, strand, biotype_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+                    "INSERT INTO genes (id, public_id, gene_id, official_gene_id, symbol, chr_id, start, end, strand, biotype_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
                     (
                         gene_map[gene_id],
                         str(uuid.uuid7()),
                         gene_id,
-                        gene_name,
+                        official_gene_id,
+                        symbol,
                         chr_id,
                         start,
                         end,

@@ -326,10 +326,15 @@ func ClosestGeneRoute(c *gin.Context) {
 
 	closestN := web.ParseNumParam(c, "closest", DefaultClosestN)
 
+	useOfficialGenes := web.ParseBoolParam(c, "use_official", true)
+
 	data := make([]*genome.GenomicSearchResults, len(locations))
 
 	for li, location := range locations {
-		genes, err := query.Db.ClosestGenes(location, query.Promoter, int8(closestN))
+		genes, err := query.Db.ClosestGenes(location,
+			query.Promoter,
+			int8(closestN),
+			useOfficialGenes)
 
 		if err != nil {
 			c.Error(err)
@@ -397,13 +402,16 @@ func AnnotateRoute(c *gin.Context) {
 		return
 	}
 
+	// default to using official gene symbols for annotation, but can be turned off with query param
+	useOfficialGenes := web.ParseBoolParam(c, "use_official", true)
+
 	closestN := web.ParseNumParam(c, "closest", DefaultClosestN)
 
 	tssRegion := ParsePromoterRegion(c)
 
 	output := web.ParseOutput(c)
 
-	annotationDb := genome.NewGtfAnnotateDb(query.Db, tssRegion, int8(closestN))
+	annotationDb := genome.NewGtfAnnotateDb(query.Db, tssRegion, int8(closestN), useOfficialGenes)
 
 	data := make([]*genome.GeneAnnotation, len(locations))
 

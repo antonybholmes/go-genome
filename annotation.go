@@ -48,9 +48,10 @@ type (
 
 	// Built on top of GtfDB to provide annotation functionality
 	GtfAnnotateDb struct {
-		GtfDB     *GtfDB
-		TSSRegion *dna.PromoterRegion
-		ClosestN  int8
+		GtfDB            *GtfDB
+		TSSRegion        *dna.PromoterRegion
+		ClosestN         int8
+		UseOfficialGenes bool
 	}
 )
 
@@ -67,11 +68,12 @@ const (
 	FeatureSeparator string = "|"
 )
 
-func NewGtfAnnotateDb(genesdb *GtfDB, tssRegion *dna.PromoterRegion, closestN int8) *GtfAnnotateDb {
+func NewGtfAnnotateDb(genesdb *GtfDB, tssRegion *dna.PromoterRegion, closestN int8, useOfficialGenes bool) *GtfAnnotateDb {
 	return &GtfAnnotateDb{
-		GtfDB:     genesdb,
-		TSSRegion: tssRegion,
-		ClosestN:  closestN,
+		GtfDB:            genesdb,
+		TSSRegion:        tssRegion,
+		ClosestN:         closestN,
+		UseOfficialGenes: useOfficialGenes,
 	}
 }
 
@@ -89,10 +91,11 @@ func (annotateDb *GtfAnnotateDb) Annotate(location *dna.Location, levels string)
 
 	level := GeneLevel
 
-	genesWithin, err := annotateDb.GtfDB.WithinGenesAndPromoter(
+	genesWithin, err := annotateDb.GtfDB.IntragenicFeatures(
 		location,
 		level,
 		annotateDb.TSSRegion,
+		annotateDb.UseOfficialGenes,
 	)
 
 	if err != nil {
@@ -100,7 +103,10 @@ func (annotateDb *GtfAnnotateDb) Annotate(location *dna.Location, levels string)
 		return nil, err
 	}
 
-	closestGenes, err := annotateDb.GtfDB.ClosestGenes(location, annotateDb.TSSRegion, annotateDb.ClosestN)
+	closestGenes, err := annotateDb.GtfDB.ClosestGenes(location,
+		annotateDb.TSSRegion,
+		annotateDb.ClosestN,
+		annotateDb.UseOfficialGenes)
 
 	if err != nil {
 		log.Error().Msgf("Error closest genes for location %s: %v", location, err)

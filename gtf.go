@@ -179,14 +179,48 @@ const (
 			<<EXONS>>
 		ORDER BY u.id, u.start`
 
-	IntragenicSql = CoreLocationSql +
-		` WHERE c.name = :chr AND 
-		(
-			(g.strand = '+' AND (:start <= t.end) AND (:end >= t.start - :prom5p)) OR
-			(g.strand = '-' AND (:start <= t.end + :prom5p) AND (:end >= t.start))
-		) AND
-		g.official_gene_id IS NOT NULL
-		ORDER BY g.gene_id, t.transcript_id, e.exon_number`
+	IntragenicSql = `SELECT DISTINCT
+			g.id, 
+			c.name AS chr,
+			g.start, 
+			g.end, 
+			g.strand, 
+			g.gene_id, 
+			g.symbol,
+			gt.name AS gene_biotype,
+			t.transcript_id,
+			t.start,
+			t.end,
+			t.is_canonical,
+			t.is_longest,
+			ft.name AS feature_type,
+			f.start,
+			f.end,
+			e.exon_id,
+			e.exon_number,
+			CASE
+				WHEN g.strand = '+' THEN :mid - t.start
+				ELSE :mid - t.end
+			END AS tss_dist,
+			((g.strand = '+') AND (:start <= t.start + :prom3p) AND (:end >= t.start - :prom5p)) OR
+				((g.strand = '-') AND (:start <= t.end + :prom5p) AND (:end >= t.end - :prom3p)) 
+			AS in_promoter,
+			:start <= f.end AND :end >= f.start AS in_exon,
+			:start <= t.end AND :end >= t.start AS is_intragenic
+		FROM genes as g
+		JOIN chromosomes AS c ON g.chr_id = c.id
+		JOIN transcripts AS t ON g.id = t.gene_id
+		JOIN features AS f ON f.transcript_id = t.id
+		JOIN feature_types AS ft ON f.feature_type_id = ft.id
+		JOIN exons AS e ON f.exon_id = e.id
+		JOIN biotypes AS gt ON g.biotype_id = gt.id
+		WHERE c.name = :chr AND 
+			(
+				(g.strand = '+' AND (:start <= t.end) AND (:end >= t.start - :prom5p)) OR
+				(g.strand = '-' AND (:start <= t.end + :prom5p) AND (:end >= t.start))
+			) AND
+			(:use_official = 0 OR g.official_gene_id IS NOT NULL)
+			ORDER BY g.gene_id, t.transcript_id, e.exon_number`
 
 	InGeneSql = CoreLocationSql +
 		` WHERE c.name = :chr AND (:start <= t.end AND :end >= t.start)`
@@ -219,7 +253,7 @@ const (
 			WHERE 
 				c.name = :chr AND
 				-- avoid annotating to genes with an ENSG symbol as these are likely to be less well characterized 
-				g.official_gene_id IS NOT NULL
+				(:use_official = 0 OR g.official_gene_id IS NOT NULL)
 		),
 		closest_transcripts AS (
 			-- get the ids of the closest transcripts for the closest genes
@@ -456,9 +490,10 @@ func (gdb *GtfDB) WithinGenes(location *dna.Location, feature string,
 	return rowsToFeatures(location, feature, rows, true)
 }
 
-func (gdb *GtfDB) WithinGenesAndPromoter(location *dna.Location,
+func (gdb *GtfDB) IntragenicFeatures(location *dna.Location,
 	levels string,
-	prom *dna.PromoterRegion) ([]*GenomicFeature, error) {
+	prom *dna.PromoterRegion,
+	useOfficialGenes bool) ([]*GenomicFeature, error) {
 
 	// rows, err := genedb.withinGeneAndPromStmt.Query(
 	// 	mid,
@@ -479,7 +514,8 @@ func (gdb *GtfDB) WithinGenesAndPromoter(location *dna.Location,
 		sql.Named("start", location.Start()),
 		sql.Named("end", location.End()),
 		sql.Named("prom5p", prom.Upstream()),
-		sql.Named("prom3p", prom.Downstream()))
+		sql.Named("prom3p", prom.Downstream()),
+		sql.Named("use_official", useOfficialGenes)) // only consider genes with an official id for intragenic annotation
 
 	if err != nil {
 		return nil, err //fmt.Errorf("there was an error with the database query")
@@ -520,7 +556,8 @@ func (gdb *GtfDB) InExon(location *dna.Location, transcriptId string, prom *dna.
 
 func (gdb *GtfDB) ClosestGenes(location *dna.Location,
 	prom *dna.PromoterRegion,
-	closestN int8) ([]*GenomicFeature, error) {
+	closestN int8,
+	useOfficialGenes bool) ([]*GenomicFeature, error) {
 
 	///log.Debug().Msgf("querying closest genes with sql %s", ClosestGeneSql)
 
@@ -531,7 +568,8 @@ func (gdb *GtfDB) ClosestGenes(location *dna.Location,
 		sql.Named("end", location.End()),
 		sql.Named("prom5p", prom.Upstream()),
 		sql.Named("prom3p", prom.Downstream()),
-		sql.Named("n", closestN))
+		sql.Named("n", closestN),
+		sql.Named("use_official", useOfficialGenes)) // only consider genes with an official id for closest gene annotation
 
 	if err != nil {
 		return nil, err

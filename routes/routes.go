@@ -13,7 +13,6 @@ import (
 	dnaroutes "github.com/antonybholmes/go-dna/routes"
 	"github.com/antonybholmes/go-genome"
 	"github.com/antonybholmes/go-genome/genomedb"
-	basemath "github.com/antonybholmes/go-math"
 	"github.com/antonybholmes/go-sys/log"
 	"github.com/antonybholmes/go-web"
 	"github.com/gin-gonic/gin"
@@ -44,8 +43,15 @@ type (
 )
 
 const (
+	// DefaultClosestN is the default number of closest genes to return for the closest gene route.
 	DefaultClosestN int = 5
-	MaxAnnotations  int = 100
+
+	// MaxClosestN is the maximum number of closest genes to return for the closest gene route.
+	// This is to prevent abuse and also to keep response times reasonable.
+	MaxClosestN int = 10
+
+	// Max number of locations to annotate in a single request. This is to prevent abuse and also to keep response times reasonable.
+	MaxAnnotations int = 100
 )
 
 var (
@@ -169,7 +175,7 @@ func GtfsRoute(c *gin.Context) {
 }
 
 func OverlappingGenesRoute(c *gin.Context) {
-	locations, err := dnaroutes.ParseLocationsFromPost(c) // dnaroutes.ParseLocationsFromPost(c)
+	locations, err := dnaroutes.ParseLocationsFromPost(c, MaxAnnotations) // dnaroutes.ParseLocationsFromPost(c)
 
 	if err != nil {
 		c.Error(err)
@@ -278,7 +284,7 @@ func SearchForGenesRoute(c *gin.Context) {
 }
 
 func WithinGenesRoute(c *gin.Context) {
-	locations, err := dnaroutes.ParseLocationsFromPost(c) // dnaroutes.ParseLocationsFromPost(c)
+	locations, err := dnaroutes.ParseLocationsFromPost(c, MaxAnnotations) // dnaroutes.ParseLocationsFromPost(c)
 
 	if err != nil {
 		c.Error(err)
@@ -310,7 +316,7 @@ func WithinGenesRoute(c *gin.Context) {
 
 // Find the n closest genes to a location
 func ClosestGeneRoute(c *gin.Context) {
-	locations, err := dnaroutes.ParseLocationsFromPost(c)
+	locations, err := dnaroutes.ParseLocationsFromPost(c, MaxAnnotations)
 
 	if err != nil {
 		c.Error(err)
@@ -324,7 +330,7 @@ func ClosestGeneRoute(c *gin.Context) {
 		return
 	}
 
-	closestN := web.ParseNumParam(c, "closest", DefaultClosestN)
+	closestN := max(web.ParseNumParam(c, "closest", DefaultClosestN), MaxClosestN)
 
 	useOfficialGenes := web.ParseBoolParam(c, "use_official", true)
 
@@ -385,15 +391,12 @@ func ParsePromoterRegion(c *gin.Context) *dna.PromoterRegion {
 }
 
 func AnnotateRoute(c *gin.Context) {
-	locations, err := dnaroutes.ParseLocationsFromPost(c)
+	locations, err := dnaroutes.ParseLocationsFromPost(c, MaxAnnotations)
 
 	if err != nil {
 		c.Error(err)
 		return
 	}
-
-	// limit amount of data returned per request to 1000 entries at a time
-	locations = locations[0:basemath.Min(len(locations), MaxAnnotations)]
 
 	query, err := parseQuery(c, "id")
 

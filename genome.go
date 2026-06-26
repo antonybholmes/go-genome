@@ -415,6 +415,10 @@ func NormalizeAssembly(assembly string) string {
 		assembly = "hg19"
 	}
 
+	if assembly == "grcm38" {
+		assembly = "mm10"
+	}
+
 	return assembly
 }
 

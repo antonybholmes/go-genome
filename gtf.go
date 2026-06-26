@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/antonybholmes/go-basemath"
 	"github.com/antonybholmes/go-dna"
+	basemath "github.com/antonybholmes/go-sys/math"
 
 	"github.com/antonybholmes/go-sys"
 	"github.com/antonybholmes/go-sys/db"

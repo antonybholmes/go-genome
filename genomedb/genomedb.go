@@ -20,22 +20,6 @@ func InitCache(path string) *genome.GenomeDB {
 	return instance
 }
 
-func GetInstance() *genome.GenomeDB {
+func Instance() *genome.GenomeDB {
 	return instance
-}
-
-func Dir() string {
-	return instance.Dir()
-}
-
-func GtfFromId(id string) (*genome.GtfDB, error) {
-	return instance.GtfFromId(id)
-}
-
-func GtfFromAssembly(assembly string) (*genome.GtfDB, error) {
-	return instance.GtfFromAssembly(assembly)
-}
-
-func Gtfs() ([]*genome.Annotation, error) {
-	return instance.Gtfs()
 }

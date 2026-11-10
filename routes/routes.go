@@ -145,7 +145,7 @@ func parseQuery(c *gin.Context, param string) (*GeneQuery, error) {
 	//if param == "assembly" {
 	//	db, err = genomedb.GtfFromAssembly(id)
 	//} else {
-	db, err := genomedb.GtfFromId(id)
+	db, err := genomedb.Instance().GtfFromId(id)
 	//}
 
 	if err != nil {
@@ -164,7 +164,7 @@ func parseQuery(c *gin.Context, param string) (*GeneQuery, error) {
 }
 
 func GtfsRoute(c *gin.Context) {
-	infos, err := genomedb.Gtfs()
+	infos, err := genomedb.Instance().Gtfs()
 
 	if err != nil {
 		c.Error(err)

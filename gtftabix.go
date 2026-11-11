@@ -150,6 +150,7 @@ func (gdb *GtfTabixDB) OverlappingGenes(location *dna.Location,
 	return features, nil
 }
 
+// Convert gtf features from a file into standardized genomic features
 func toGenomicFeature(feats []*Feature, levels string, canonicalMode bool, annotationMode bool) ([]*GenomicFeature, error) {
 	var currentGene *GenomicFeature
 	var currentTranscript *GenomicFeature
@@ -205,22 +206,22 @@ func toGenomicFeature(feats []*Feature, levels string, canonicalMode bool, annot
 
 		// gene inherits properties from transcripts and these become true
 		// if any transcript has them true
-		// if currentGene != nil {
-		// 	currentGene.IsCanonical = currentGene.IsCanonical || isCanonical
-		// 	currentGene.IsLongest = currentGene.IsLongest || isLongest
+		if currentGene != nil {
+			currentGene.IsCanonical = currentGene.IsCanonical || isCanonical
+			//currentGene.IsLongest = currentGene.IsLongest || isLongest
 
-		// 	// add extra properties if in annotation mode
-		// 	if annotationMode {
-		// 		currentGene.InPromoter = currentGene.InPromoter || inPromoter
-		// 		currentGene.InExon = currentGene.InExon || inExon
-		// 		currentGene.IsIntragenic = currentGene.IsIntragenic || isIntragenic
-		// 		currentGene.Label = MakePromLabel(currentGene.InPromoter, currentGene.InExon, currentGene.IsIntragenic)
+			// add extra properties if in annotation mode
+			if annotationMode {
+				//currentGene.InPromoter = currentGene.InPromoter || inPromoter
+				//currentGene.InExon = currentGene.InExon || inExon
+				//currentGene.IsIntragenic = currentGene.IsIntragenic || isIntragenic
+				//currentGene.Label = MakePromLabel(currentGene.InPromoter, currentGene.InExon, currentGene.IsIntragenic)
 
-		// 		if (basemath.AbsInt(tssDist) < basemath.AbsInt(currentGene.TssDist)) || currentGene.TssDist == 0 {
-		// 			currentGene.TssDist = tssDist
-		// 		}
-		// 	}
-		// }
+				//if (basemath.AbsInt(tssDist) < basemath.AbsInt(currentGene.TssDist)) || currentGene.TssDist == 0 {
+				//	currentGene.TssDist = tssDist
+				//}
+			}
+		}
 
 		//if canonical mode only add if transcript is canonical
 		// also only add if we have a current gene

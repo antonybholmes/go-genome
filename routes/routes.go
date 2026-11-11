@@ -139,14 +139,7 @@ func parseQuery(c *gin.Context, param string) (*GeneQuery, error) {
 
 	promoterRegion := ParsePromoterRegion(c)
 
-	//var db *genome.GtfDB
-	//var err error
-
-	//if param == "assembly" {
-	//	db, err = genomedb.GtfFromAssembly(id)
-	//} else {
 	db, err := genomedb.Instance().GtfFromId(id)
-	//}
 
 	if err != nil {
 		return nil, fmt.Errorf("unable to open database for assembly %s %s", id, err)
@@ -238,6 +231,8 @@ func SearchForGenesByAssemblyRoute(c *gin.Context) {
 
 	canonical := strings.HasPrefix(strings.ToLower(c.Query("canonical")), "t")
 
+	log.Debug().Msgf("Search query: %s", search)
+
 	features, _ := query.Db.SearchByName(search,
 		query.Feature,
 		canonical,
@@ -253,6 +248,8 @@ func SearchForGenesByAssemblyRoute(c *gin.Context) {
 // Search for genes using a specific gtf database. Preferable
 // as slightly faster lookup.
 func SearchForGenesRoute(c *gin.Context) {
+	log.Debug().Msgf("Search for gene")
+
 	search := c.Query("q")
 
 	if search == "" {
@@ -270,6 +267,8 @@ func SearchForGenesRoute(c *gin.Context) {
 	}
 
 	canonical := strings.HasPrefix(strings.ToLower(c.Query("canonical")), "t")
+
+	log.Debug().Msgf("Search query: %s", search)
 
 	features, _ := query.Db.SearchByName(search,
 		query.Feature,

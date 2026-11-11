@@ -194,6 +194,10 @@ func (gdb *GenomeDB) Genomes() ([]*db.Entity, error) {
 		genomes = append(genomes, &genome)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return genomes, nil
 }
 
@@ -219,6 +223,10 @@ func (gdb *GenomeDB) Assemblies(genome string) ([]*db.Entity, error) {
 		}
 
 		assemblies = append(assemblies, &assembly)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return assemblies, nil
@@ -286,6 +294,10 @@ func (gdb *GenomeDB) Annotations(assembly string, annotationType string) ([]*Ann
 		ret = append(ret, &annotation)
 	}
 
+	if err := datasetRows.Err(); err != nil {
+		return nil, err
+	}
+
 	return ret, nil
 }
 
@@ -331,8 +343,11 @@ func (gdb *GenomeDB) GtfFromId(id string) (*GtfDB, error) {
 	annotation, err := gdb.Annotation(id)
 
 	if err != nil {
+		log.Debug().Msgf("Error loading annotation for id: %s, err: %s", id, err)
 		return nil, err
 	}
+
+	log.Debug().Msgf("Loading GTF for annotation: %s", annotation.PublicId)
 
 	db := NewGtfDB(gdb.dir, annotation)
 
@@ -400,6 +415,10 @@ func (gdb *GenomeDB) Gtfs() ([]*Annotation, error) {
 		}
 
 		ret = append(ret, &annotation)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return ret, nil

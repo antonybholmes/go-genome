@@ -320,7 +320,7 @@ func (gdb *GenomeDB) GtfFromId(id string) (*GtfSqliteDB, error) {
 
 	log.Debug().Msgf("Loading GTF for annotation: %s", annotation.PublicId)
 
-	db := NewGtfDB(gdb.dir, annotation)
+	db := NewGtfSqliteDB(gdb.dir, annotation)
 
 	return db, nil
 }
@@ -344,7 +344,7 @@ func (gdb *GenomeDB) GtfFromAssembly(assembly string) (*GtfSqliteDB, error) {
 
 	//if !ok {
 	//db := NewGeneDB(assembly, filepath.Join(cache.dir, fmt.Sprintf("%s.db", assembly)))
-	db := NewGtfDB(gdb.dir, annotation) //   cache.dbCreator(assembly, cache.dir) //filepath.Join(cache.dir, fmt.Sprintf("gtf_%s.db", assembly)))
+	db := NewGtfSqliteDB(gdb.dir, annotation) //   cache.dbCreator(assembly, cache.dir) //filepath.Join(cache.dir, fmt.Sprintf("gtf_%s.db", assembly)))
 
 	//cache.cacheMap[assembly] = db
 	//}

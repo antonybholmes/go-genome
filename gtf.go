@@ -5,16 +5,6 @@ import (
 )
 
 type (
-
-	// GtfDBInfo struct {
-	// 	PublicId string `json:"id"`
-	// 	Genome   string `json:"genome"`
-	// 	Assembly string `json:"assembly"`
-	// 	Name     string `json:"name"`
-	// 	File     string `json:"-"`
-	// 	Id       int    `json:"-"`
-	// }
-
 	GenomicFeatures struct {
 		Type     string            `json:"type"`
 		Features []*GenomicFeature `json:"features"`

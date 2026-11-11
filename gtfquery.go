@@ -308,7 +308,7 @@ const (
 // 	return dna.NewLocation(feature.Chr, feature.Start, feature.End)
 // }
 
-func NewGtfDB(dir string, annotation *Annotation) *GtfSqliteDB {
+func NewGtfSqliteDB(dir string, annotation *Annotation) *GtfSqliteDB {
 	file := filepath.Join(dir, annotation.Url)
 
 	log.Debug().Msgf("opening gene database %s", file)

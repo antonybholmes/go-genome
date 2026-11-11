@@ -48,7 +48,7 @@ type (
 
 	// Built on top of GtfDB to provide annotation functionality
 	GtfAnnotateDb struct {
-		GtfDB            *GtfDB
+		GtfDB            GtfDB
 		TSSRegion        *dna.PromoterRegion
 		ClosestN         int8
 		UseOfficialGenes bool
@@ -68,7 +68,7 @@ const (
 	FeatureSeparator string = "|"
 )
 
-func NewGtfAnnotateDb(genesdb *GtfDB, tssRegion *dna.PromoterRegion, closestN int8, useOfficialGenes bool) *GtfAnnotateDb {
+func NewGtfAnnotateDb(genesdb GtfDB, tssRegion *dna.PromoterRegion, closestN int8, useOfficialGenes bool) *GtfAnnotateDb {
 	return &GtfAnnotateDb{
 		GtfDB:            genesdb,
 		TSSRegion:        tssRegion,

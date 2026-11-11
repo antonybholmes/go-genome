@@ -24,7 +24,7 @@ type (
 		Id string
 		//Assembly string
 		Feature string
-		Db      *genome.GtfDB
+		Db      genome.GtfDB
 		Biotype string // e.g. "protein_coding", "non_coding", etc.
 		// only show canonical genes
 		Canonical bool

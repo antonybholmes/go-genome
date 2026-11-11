@@ -92,7 +92,7 @@ const (
 		WHERE g.rank < :n`
 )
 
-func (gdb *GtfDB) SearchByName(search string,
+func (gdb *GtfSqliteDB) SearchByName(search string,
 	level string,
 	canonicalMode bool,
 	n int16) ([]*GenomicFeature, error) {
@@ -128,7 +128,7 @@ func (gdb *GtfDB) SearchByName(search string,
 
 // Searching for exons or transcripts uses essentially
 // the same pipeline so combine into one method.
-func (gdb *GtfDB) searchTranscripts(search string,
+func (gdb *GtfSqliteDB) searchTranscripts(search string,
 	canonicalMode bool,
 	exonMode bool,
 	n int16) ([]*GenomicFeature, error) {
@@ -168,7 +168,7 @@ func (gdb *GtfDB) searchTranscripts(search string,
 
 }
 
-func (gdb *GtfDB) searchGenes(search string,
+func (gdb *GtfSqliteDB) searchGenes(search string,
 	n int16) ([]*GenomicFeature, error) {
 	n = max(1, min(n, MaxGeneInfoResults))
 

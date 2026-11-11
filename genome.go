@@ -24,35 +24,6 @@ type (
 		path string
 	}
 
-	// GeneDB interface {
-	// 	//GeneDBInfo() (*GeneDBInfo, error)
-
-	// 	Close() error
-
-	// 	OverlappingGenes(location *dna.Location,
-	// 		level string,
-	// 		prom *dna.PromoterRegion,
-	// 		canonicalMode bool,
-	// 		geneTypeFilter string) ([]*GenomicFeature, error)
-
-	// 	SearchByName(search string,
-	// 		level string,
-	// 		fuzzy bool,
-	// 		canonical bool,
-	// 		geneType string,
-	// 		n int16) ([]*GenomicFeature, error)
-
-	// 	WithinGenes(location *dna.Location, level string, prom *dna.PromoterRegion) (*GenomicFeatures, error)
-
-	// 	WithinGenesAndPromoter(location *dna.Location, level string, prom *dna.PromoterRegion) ([]*GenomicFeature, error)
-
-	// 	InExon(location *dna.Location, transcriptId string, prom *dna.PromoterRegion) ([]*GenomicFeature, error)
-
-	// 	ClosestGenes(location *dna.Location,
-	// 		prom *dna.PromoterRegion,
-	// 		closestN int8) ([]*GenomicFeature, error)
-	// }
-
 	Annotation struct {
 		PublicId string `json:"id"`
 		Genome   string `json:"genome"`
@@ -337,7 +308,7 @@ func (gdb *GenomeDB) Annotations(assembly string, annotationType string) ([]*Ann
 // }
 
 // Lookup a db using its public id
-func (gdb *GenomeDB) GtfFromId(id string) (*GtfDB, error) {
+func (gdb *GenomeDB) GtfFromId(id string) (*GtfSqliteDB, error) {
 	//_, ok := cache.cacheMap[assembly]
 
 	annotation, err := gdb.Annotation(id)
@@ -355,7 +326,7 @@ func (gdb *GenomeDB) GtfFromId(id string) (*GtfDB, error) {
 }
 
 // From the genome central db, look for the latest GTF annotation for the given assembly
-func (gdb *GenomeDB) GtfFromAssembly(assembly string) (*GtfDB, error) {
+func (gdb *GenomeDB) GtfFromAssembly(assembly string) (*GtfSqliteDB, error) {
 	//_, ok := cache.cacheMap[assembly]
 
 	annotations, err := gdb.Annotations(assembly, "gtf")

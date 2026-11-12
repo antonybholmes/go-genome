@@ -48,7 +48,7 @@ type (
 
 	// Built on top of GtfDB to provide annotation functionality
 	GtfAnnotateDb struct {
-		GtfDB            GtfDB
+		DB               GtfDB
 		TSSRegion        *dna.PromoterRegion
 		ClosestN         int8
 		UseOfficialGenes bool
@@ -70,7 +70,7 @@ const (
 
 func NewGtfAnnotateDb(genesdb GtfDB, tssRegion *dna.PromoterRegion, closestN int8, useOfficialGenes bool) *GtfAnnotateDb {
 	return &GtfAnnotateDb{
-		GtfDB:            genesdb,
+		DB:               genesdb,
 		TSSRegion:        tssRegion,
 		ClosestN:         closestN,
 		UseOfficialGenes: useOfficialGenes,
@@ -91,7 +91,7 @@ func (annotateDb *GtfAnnotateDb) Annotate(location *dna.Location, levels string)
 
 	level := GeneLevel
 
-	genesWithin, err := annotateDb.GtfDB.IntragenicFeatures(
+	genesWithin, err := annotateDb.DB.IntragenicFeatures(
 		location,
 		level,
 		annotateDb.TSSRegion,
@@ -103,7 +103,7 @@ func (annotateDb *GtfAnnotateDb) Annotate(location *dna.Location, levels string)
 		return nil, err
 	}
 
-	closestGenes, err := annotateDb.GtfDB.ClosestGenes(location,
+	closestGenes, err := annotateDb.DB.ClosestGenes(location,
 		annotateDb.TSSRegion,
 		annotateDb.ClosestN,
 		annotateDb.UseOfficialGenes)
@@ -134,7 +134,7 @@ func (annotateDb *GtfAnnotateDb) ClassifyFeature(location *dna.Location, feature
 	var start int
 
 	if feature.Location.Strand() == "+" {
-		start = feature.Location.Start() - annotateDb.TSSRegion.Upstream()
+		start = feature.Location.Start() - annotateDb.TSSRegion.FivePrime()
 	} else {
 		start = feature.Location.Start()
 	}
@@ -142,7 +142,7 @@ func (annotateDb *GtfAnnotateDb) ClassifyFeature(location *dna.Location, feature
 	var end int
 
 	if feature.Location.Strand() == "-" {
-		end = feature.Location.End() + annotateDb.TSSRegion.Upstream()
+		end = feature.Location.End() + annotateDb.TSSRegion.FivePrime()
 	} else {
 		end = feature.Location.End()
 	}
@@ -151,16 +151,16 @@ func (annotateDb *GtfAnnotateDb) ClassifyFeature(location *dna.Location, feature
 	// 	return INTERGENIC
 	// }
 
-	isPromoter := (feature.Location.Strand() == "+" && mid >= start && mid <= feature.Location.Start()+annotateDb.TSSRegion.Downstream()) ||
-		(feature.Location.Strand() == "-" && mid >= feature.Location.End()-annotateDb.TSSRegion.Downstream() && mid <= end)
+	isPromoter := (feature.Location.Strand() == "+" && mid >= start && mid <= feature.Location.Start()+annotateDb.TSSRegion.ThreePrime()) ||
+		(feature.Location.Strand() == "-" && mid >= feature.Location.End()-annotateDb.TSSRegion.ThreePrime() && mid <= end)
 
-	exons, err := annotateDb.GtfDB.InExon(location, feature.Transcript, annotateDb.TSSRegion)
+	isExon, err := annotateDb.DB.InExon(location, feature.Transcript, annotateDb.TSSRegion)
 
 	if err != nil {
 		return "", err
 	}
 
-	isExon := len(exons) > 0
+	// isExon := len(exons) > 0
 
 	isIntronic := mid >= feature.Location.Start() && mid <= feature.Location.End()
 

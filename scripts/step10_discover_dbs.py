@@ -20,7 +20,7 @@ dir = args.dir  # sys.argv[1]
 data = []
 
 
-db = os.path.join(dir, "genomes.v20260608.db")
+db = os.path.join(dir, "genomes.v20261112.db")
 
 
 if os.path.exists(db):
@@ -159,7 +159,7 @@ for root, dirs, files in os.walk(dir):
         continue
 
     for filename in sorted(files):
-        if "gtf" in filename and filename.endswith(".db") and ".v2026" in filename:
+        if "gtf" in filename and filename.endswith(".db") and ".v20261112" in filename:
             # relative_dir = root.replace(dir, "")[1:]
 
             # genome, platform, dataset = relative_dir.split("/")

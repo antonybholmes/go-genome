@@ -1,4 +1,4 @@
-package genome
+package gtfsqlite
 
 import (
 	"database/sql"
@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/antonybholmes/go-dna"
+	"github.com/antonybholmes/go-genome"
 	"github.com/antonybholmes/go-sys/log"
 )
 
@@ -95,7 +96,7 @@ const (
 func (gdb *GtfSqliteDB) SearchByName(search string,
 	level string,
 	canonicalMode bool,
-	n int16) ([]*GenomicFeature, error) {
+	n int16) ([]*genome.GenomicFeature, error) {
 	n = max(1, min(n, MaxGeneInfoResults))
 
 	//log.Debug().Msgf("SearchForGeneByName for gene %s level %s fuzzy %v canonical %v geneType %s n %d",
@@ -131,7 +132,7 @@ func (gdb *GtfSqliteDB) SearchByName(search string,
 func (gdb *GtfSqliteDB) searchTranscripts(search string,
 	canonicalMode bool,
 	exonMode bool,
-	n int16) ([]*GenomicFeature, error) {
+	n int16) ([]*genome.GenomicFeature, error) {
 	n = max(1, min(n, MaxGeneInfoResults))
 
 	var sqlStmt string
@@ -169,10 +170,10 @@ func (gdb *GtfSqliteDB) searchTranscripts(search string,
 }
 
 func (gdb *GtfSqliteDB) searchGenes(search string,
-	n int16) ([]*GenomicFeature, error) {
+	n int16) ([]*genome.GenomicFeature, error) {
 	n = max(1, min(n, MaxGeneInfoResults))
 
-	log.Debug().Msgf("searching for gene: %s, n: %d, SQL: %s", search, n, GeneInfoSql)
+	//log.Debug().Msgf("searching for gene: %s, n: %d, SQL: %s", search, n, GeneInfoSql)
 
 	rows, err := gdb.db.Query(GeneInfoSql,
 		sql.Named("q", search),
@@ -195,7 +196,7 @@ func (gdb *GtfSqliteDB) searchGenes(search string,
 }
 
 // complete records for genes -> transcripts -> exons
-func genesToGeneInfoRecords(rows *sql.Rows) ([]*GenomicFeature, error) {
+func genesToGeneInfoRecords(rows *sql.Rows) ([]*genome.GenomicFeature, error) {
 	var gid int
 	var chr string
 	var geneStart int
@@ -208,7 +209,7 @@ func genesToGeneInfoRecords(rows *sql.Rows) ([]*GenomicFeature, error) {
 	// 10 seems a reasonable guess for the number of features we might see, just
 	// to reduce slice reallocation
 
-	var ret = make([]*GenomicFeature, 0, 10)
+	var ret = make([]*genome.GenomicFeature, 0, 10)
 
 	for rows.Next() {
 		//err := geneRows.Scan(&id, &level, &chr, &start, &end, &strand, &geneId, &geneSymbol, &transcriptId, &exonId)
@@ -237,9 +238,9 @@ func genesToGeneInfoRecords(rows *sql.Rows) ([]*GenomicFeature, error) {
 			return nil, err
 		}
 
-		currentGene := &GenomicFeature{Id: gid,
+		currentGene := &genome.GenomicFeature{Id: gid,
 			Location: location,
-			Type:     GeneLevel,
+			Type:     genome.GeneLevel,
 			Symbol:   geneSymbol,
 			GeneId:   geneId,
 			//Strand:   strand,
@@ -257,7 +258,7 @@ func genesToGeneInfoRecords(rows *sql.Rows) ([]*GenomicFeature, error) {
 }
 
 // complete records for genes -> transcripts -> exons
-func transcriptsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*GenomicFeature, error) {
+func transcriptsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*genome.GenomicFeature, error) {
 	var gid int
 	var chr string
 	var geneStart int
@@ -280,10 +281,10 @@ func transcriptsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*Genomi
 	// 10 seems a reasonable guess for the number of features we might see, just
 	// to reduce slice reallocation
 
-	var currentGene *GenomicFeature
-	var currentTranscript *GenomicFeature
+	var currentGene *genome.GenomicFeature
+	var currentTranscript *genome.GenomicFeature
 
-	var ret = make([]*GenomicFeature, 0, 10)
+	var ret = make([]*genome.GenomicFeature, 0, 10)
 
 	for rows.Next() {
 		//err := geneRows.Scan(&id, &level, &chr, &start, &end, &strand, &geneId, &geneSymbol, &transcriptId, &exonId)
@@ -318,9 +319,9 @@ func transcriptsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*Genomi
 				return nil, err
 			}
 
-			currentGene = &GenomicFeature{Id: gid,
+			currentGene = &genome.GenomicFeature{Id: gid,
 				Location: location,
-				Type:     GeneLevel,
+				Type:     genome.GeneLevel,
 				Symbol:   geneSymbol,
 				GeneId:   geneId,
 				//Strand:   strand,
@@ -335,7 +336,7 @@ func transcriptsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*Genomi
 		// if any transcript has them true
 		if currentGene != nil {
 			currentGene.IsCanonical = currentGene.IsCanonical || isCanonical
-			currentGene.IsLongest = currentGene.IsLongest || isLongest
+			//currentGene.IsLongest = currentGene.IsLongest || isLongest
 
 		}
 
@@ -352,22 +353,22 @@ func transcriptsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*Genomi
 			}
 
 			// set the properties that will not change for a transcript
-			currentTranscript = &GenomicFeature{Id: gid,
+			currentTranscript = &genome.GenomicFeature{Id: gid,
 				Location: location,
 				//Strand:       strand,
-				Type:        TranscriptLevel,
+				Type:        genome.TranscriptLevel,
 				Symbol:      geneSymbol,
 				GeneId:      geneId,
 				Transcript:  transcriptId,
 				IsCanonical: isCanonical,
-				IsLongest:   isLongest,
+				//IsLongest:   isLongest,
 				//Biotype:      transcriptType,
 				//Children: make([]*GenomicFeature, 0, 10)
 			}
 
 			if currentGene != nil {
 				if currentGene.Children == nil {
-					currentGene.Children = make([]*GenomicFeature, 0, 10)
+					currentGene.Children = make([]*genome.GenomicFeature, 0, 10)
 				}
 
 				currentGene.Children = append(currentGene.Children, currentTranscript)
@@ -383,7 +384,7 @@ func transcriptsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*Genomi
 }
 
 // complete records for genes -> transcripts -> exons
-func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*GenomicFeature, error) {
+func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*genome.GenomicFeature, error) {
 	var gid int
 	var chr string
 	var geneStart int
@@ -411,11 +412,11 @@ func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*GenomicFeatu
 	// 10 seems a reasonable guess for the number of features we might see, just
 	// to reduce slice reallocation
 
-	var currentGene *GenomicFeature
-	var currentTranscript *GenomicFeature
-	var currentExon *GenomicFeature
+	var currentGene *genome.GenomicFeature
+	var currentTranscript *genome.GenomicFeature
+	var currentExon *genome.GenomicFeature
 
-	var ret = make([]*GenomicFeature, 0, 10)
+	var ret = make([]*genome.GenomicFeature, 0, 10)
 
 	for rows.Next() {
 		//err := geneRows.Scan(&id, &level, &chr, &start, &end, &strand, &geneId, &geneSymbol, &transcriptId, &exonId)
@@ -454,9 +455,9 @@ func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*GenomicFeatu
 				return nil, err
 			}
 
-			currentGene = &GenomicFeature{Id: gid,
+			currentGene = &genome.GenomicFeature{Id: gid,
 				Location: location,
-				Type:     GeneLevel,
+				Type:     genome.GeneLevel,
 				Symbol:   geneSymbol,
 				GeneId:   geneId,
 				//Strand:   strand,
@@ -471,7 +472,7 @@ func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*GenomicFeatu
 		// if any transcript has them true
 		if currentGene != nil {
 			currentGene.IsCanonical = currentGene.IsCanonical || isCanonical
-			currentGene.IsLongest = currentGene.IsLongest || isLongest
+			//currentGene.IsLongest = currentGene.IsLongest || isLongest
 
 		}
 
@@ -488,22 +489,22 @@ func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*GenomicFeatu
 			}
 
 			// set the properties that will not change for a transcript
-			currentTranscript = &GenomicFeature{Id: gid,
+			currentTranscript = &genome.GenomicFeature{Id: gid,
 				Location: location,
 				//Strand:       strand,
-				Type:        TranscriptLevel,
+				Type:        genome.TranscriptLevel,
 				Symbol:      geneSymbol,
 				GeneId:      geneId,
 				Transcript:  transcriptId,
 				IsCanonical: isCanonical,
-				IsLongest:   isLongest,
+				//IsLongest:   isLongest,
 				//Biotype:      transcriptType,
 				//Children: make([]*GenomicFeature, 0, 10)
 			}
 
 			if currentGene != nil {
 				if currentGene.Children == nil {
-					currentGene.Children = make([]*GenomicFeature, 0, 10)
+					currentGene.Children = make([]*genome.GenomicFeature, 0, 10)
 				}
 
 				currentGene.Children = append(currentGene.Children, currentTranscript)
@@ -521,9 +522,9 @@ func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*GenomicFeatu
 			return nil, err
 		}
 
-		currentExon = &GenomicFeature{Id: gid,
+		currentExon = &genome.GenomicFeature{Id: gid,
 			Location:   location,
-			Type:       ExonLevel,
+			Type:       genome.ExonLevel,
 			Symbol:     geneSymbol,
 			GeneId:     geneId,
 			Transcript: transcriptId,
@@ -533,7 +534,7 @@ func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*GenomicFeatu
 
 		if currentTranscript != nil {
 			if currentTranscript.Children == nil {
-				currentTranscript.Children = make([]*GenomicFeature, 0, 10)
+				currentTranscript.Children = make([]*genome.GenomicFeature, 0, 10)
 			}
 
 			currentTranscript.Children = append(currentTranscript.Children, currentExon)

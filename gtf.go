@@ -1,6 +1,8 @@
 package genome
 
 import (
+	"strings"
+
 	"github.com/antonybholmes/go-dna"
 )
 
@@ -11,15 +13,15 @@ type (
 	}
 
 	GenomicFeature struct {
-		Location   *dna.Location `json:"loc"`
-		PublicId   string        `json:"id,omitempty"`
-		Label      string        `json:"label,omitempty"`
-		Biotype    string        `json:"biotype,omitempty"`
-		GeneId     string        `json:"geneId,omitempty"`
-		Symbol     string        `json:"symbol,omitempty"`
-		Transcript string        `json:"transcript,omitempty"`
-		Exon       string        `json:"exon,omitempty"`
-		//Strand       string            `json:"strand,omitempty"`
+		Location     *dna.Location     `json:"loc"`
+		PublicId     string            `json:"id,omitempty"`
+		Label        string            `json:"label,omitempty"`
+		Biotype      string            `json:"biotype,omitempty"`
+		GeneId       string            `json:"geneId,omitempty"`
+		Symbol       string            `json:"symbol,omitempty"`
+		Transcript   string            `json:"transcript,omitempty"`
+		Exon         string            `json:"exon,omitempty"`
+		Strand       string            `json:"strand,omitempty"`
 		Type         string            `json:"type,omitempty"`
 		Children     []*GenomicFeature `json:"children,omitempty"`
 		TssDist      int               `json:"tssDist,omitempty"`
@@ -29,8 +31,8 @@ type (
 		InPromoter   bool              `json:"inPromoter,omitempty"`
 		InExon       bool              `json:"inExon,omitempty"`
 		IsIntragenic bool              `json:"isIntragenic,omitempty"`
-		IsLongest    bool              `json:"isLongest,omitempty"`
-		IsCanonical  bool              `json:"isCanonical,omitempty"`
+		//IsLongest    bool              `json:"isLongest,omitempty"`
+		IsCanonical bool `json:"isCanonical,omitempty"`
 	}
 
 	GenomicSearchResults struct {
@@ -42,7 +44,7 @@ type (
 	GtfDB interface {
 		InExon(location *dna.Location,
 			transcriptId string,
-			prom *dna.PromoterRegion) ([]*GenomicFeature, error)
+			prom *dna.PromoterRegion) (bool, error)
 
 		IntragenicFeatures(location *dna.Location,
 			levels string,
@@ -66,9 +68,9 @@ type (
 			canonicalMode bool,
 			n int16) ([]*GenomicFeature, error)
 
-		WithinGenes(location *dna.Location,
-			feature string,
-			prom *dna.PromoterRegion) (*GenomicSearchResults, error)
+		// WithinGenes(location *dna.Location,
+		// 	feature string,
+		// 	prom *dna.PromoterRegion) (*GenomicSearchResults, error)
 
 		Close() error
 	}
@@ -91,3 +93,30 @@ var (
 		"utr":  "utrs",
 	}
 )
+
+func FeaturesToSearchResults(location *dna.Location,
+	levels string,
+	features []*GenomicFeature,
+	annotationMode bool) (*GenomicSearchResults, error) {
+
+	var level = MaxLevel(levels)
+
+	ret := GenomicSearchResults{Location: location, Type: level, Features: features}
+
+	return &ret, nil
+}
+
+func MaxLevel(levels string) string {
+	var level string
+
+	switch strings.ToLower(string(levels)) {
+	case "gene", "genes":
+		level = GeneLevel
+	case "transcript", "transcripts":
+		level = TranscriptLevel
+	default:
+		level = ExonLevel
+	}
+
+	return level
+}

@@ -23,9 +23,9 @@ type (
 	GeneQuery struct {
 		Id string
 		//Assembly string
-		Feature string
-		Db      genome.GtfDB
-		Biotype string // e.g. "protein_coding", "non_coding", etc.
+		Feature  string
+		Database genome.GtfDB
+		Biotype  string // e.g. "protein_coding", "non_coding", etc.
 		// only show canonical genes
 		Canonical bool
 		Promoter  *dna.PromoterRegion
@@ -149,7 +149,7 @@ func parseQuery(c *gin.Context, param string) (*GeneQuery, error) {
 			Id: id,
 			//Assembly:  id,
 			Biotype:   biotype,
-			Db:        db,
+			Database:  db,
 			Feature:   feature,
 			Canonical: canonical,
 			Promoter:  promoterRegion},
@@ -189,7 +189,7 @@ func OverlappingGenesRoute(c *gin.Context) {
 	ret := make([]*GenesResp, 0, len(locations))
 
 	for _, location := range locations {
-		features, err := query.Db.OverlappingGenes(location,
+		features, err := query.Database.OverlappingGenes(location,
 			query.Feature,
 			query.Promoter,
 			query.Canonical,
@@ -231,9 +231,7 @@ func SearchForGenesByAssemblyRoute(c *gin.Context) {
 
 	canonical := strings.HasPrefix(strings.ToLower(c.Query("canonical")), "t")
 
-	log.Debug().Msgf("Search query: %s", search)
-
-	features, _ := query.Db.SearchByName(search,
+	features, _ := query.Database.SearchByName(search,
 		query.Feature,
 		canonical,
 		int16(n))
@@ -248,7 +246,6 @@ func SearchForGenesByAssemblyRoute(c *gin.Context) {
 // Search for genes using a specific gtf database. Preferable
 // as slightly faster lookup.
 func SearchForGenesRoute(c *gin.Context) {
-	log.Debug().Msgf("Search for gene")
 
 	search := c.Query("q")
 
@@ -268,9 +265,7 @@ func SearchForGenesRoute(c *gin.Context) {
 
 	canonical := strings.HasPrefix(strings.ToLower(c.Query("canonical")), "t")
 
-	log.Debug().Msgf("Search query: %s", search)
-
-	features, _ := query.Db.SearchByName(search,
+	features, _ := query.Database.SearchByName(search,
 		query.Feature,
 		canonical,
 		int16(n))
@@ -282,36 +277,36 @@ func SearchForGenesRoute(c *gin.Context) {
 	web.MakeDataResp(c, "", &features)
 }
 
-func WithinGenesRoute(c *gin.Context) {
-	locations, err := dnaroutes.ParseLocationsFromPost(c, MaxAnnotations) // dnaroutes.ParseLocationsFromPost(c)
+// func WithinGenesRoute(c *gin.Context) {
+// 	locations, err := dnaroutes.ParseLocationsFromPost(c, MaxAnnotations) // dnaroutes.ParseLocationsFromPost(c)
 
-	if err != nil {
-		c.Error(err)
-		return
-	}
+// 	if err != nil {
+// 		c.Error(err)
+// 		return
+// 	}
 
-	query, err := parseQuery(c, "assembly")
+// 	query, err := parseQuery(c, "assembly")
 
-	if err != nil {
-		c.Error(err)
-		return
-	}
+// 	if err != nil {
+// 		c.Error(err)
+// 		return
+// 	}
 
-	data := make([]*genome.GenomicSearchResults, len(locations))
+// 	data := make([]*genome.GenomicSearchResults, len(locations))
 
-	for li, location := range locations {
-		genes, err := query.Db.WithinGenes(location, query.Feature, query.Promoter)
+// 	for li, location := range locations {
+// 		genes, err := query.Db.WithinGenes(location, query.Feature, query.Promoter)
 
-		if err != nil {
-			c.Error(err)
-			return
-		}
+// 		if err != nil {
+// 			c.Error(err)
+// 			return
+// 		}
 
-		data[li] = genes
-	}
+// 		data[li] = genes
+// 	}
 
-	web.MakeDataResp(c, "", &data)
-}
+// 	web.MakeDataResp(c, "", &data)
+// }
 
 // Find the n closest genes to a location
 func ClosestGeneRoute(c *gin.Context) {
@@ -336,7 +331,7 @@ func ClosestGeneRoute(c *gin.Context) {
 	data := make([]*genome.GenomicSearchResults, len(locations))
 
 	for li, location := range locations {
-		genes, err := query.Db.ClosestGenes(location,
+		genes, err := query.Database.ClosestGenes(location,
 			query.Promoter,
 			int8(closestN),
 			useOfficialGenes)
@@ -413,7 +408,7 @@ func AnnotateRoute(c *gin.Context) {
 
 	output := web.ParseOutput(c)
 
-	annotationDb := genome.NewGtfAnnotateDb(query.Db, tssRegion, int8(closestN), useOfficialGenes)
+	annotationDb := genome.NewGtfAnnotateDb(query.Database, tssRegion, int8(closestN), useOfficialGenes)
 
 	data := make([]*genome.GeneAnnotation, len(locations))
 
@@ -460,8 +455,8 @@ func MakeGeneTable(
 	headers[2] = "Gene Symbol"
 	headers[3] = fmt.Sprintf(
 		"Relative To Gene (prom=-%d/+%dkb)",
-		ts.Upstream()/1000,
-		ts.Downstream()/1000)
+		ts.FivePrime()/1000,
+		ts.ThreePrime()/1000)
 	headers[4] = "TSS Distance"
 	//headers[5] = "Gene Location"
 
@@ -472,8 +467,8 @@ func MakeGeneTable(
 		headers[idx] = fmt.Sprintf(
 			"#%d Relative To Closet Gene (prom=-%d/+%dkb)",
 			i,
-			ts.Upstream()/1000,
-			ts.Downstream()/1000)
+			ts.FivePrime()/1000,
+			ts.ThreePrime()/1000)
 		headers[idx] = fmt.Sprintf("#%d TSS Closest Distance", i)
 		headers[idx] = fmt.Sprintf("#%d Gene Location", i)
 	}

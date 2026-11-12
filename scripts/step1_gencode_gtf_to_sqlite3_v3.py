@@ -1,0 +1,564 @@
+# -*- coding: utf-8 -*-
+"""
+Generate a tss distribution for a region file
+
+Created on Thu Jun 26 10:35:40 2014
+
+@author: Antony Holmes
+"""
+
+import collections
+import gzip
+import json
+import os
+import re
+import sqlite3
+import sys
+
+import numpy as np
+import pandas as pd
+import uuid_utils as uuid
+
+tables = ["genes"]
+
+level_map = {"gene": 1, "transcript": 2, "exon": 3}
+
+with open("files.json", "r") as f:
+    files = json.load(f)
+
+
+INFO_SQL = """CREATE TABLE info (id 
+    INTEGER PRIMARY KEY,
+    public_id TEXT NOT NULL UNIQUE,
+    genome TEXT NOT NULL DEFAULT '',
+    assembly TEXT NOT NULL DEFAULT '',
+    version TEXT NOT NULL DEFAULT '',
+    name TEXT NOT NULL DEFAULT '',
+    file TEXT NOT NULL DEFAULT ''
+);"""
+
+BIOTYPES_SQL = """CREATE TABLE biotypes (
+    id INTEGER PRIMARY KEY,
+    public_id TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL UNIQUE);"""
+
+CHROMOSOMES_SQL = """CREATE TABLE chromosomes (
+    id INTEGER PRIMARY KEY,
+    public_id TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL UNIQUE);"""
+
+GENES_SQL = """CREATE TABLE genes (
+    id INTEGER PRIMARY KEY,
+    -- public_id TEXT NOT NULL UNIQUE,
+    biotype_id INT NOT NULL,
+    gene_id TEXT NOT NULL DEFAULT '',
+    official_gene_id TEXT,
+    symbol TEXT NOT NULL DEFAULT '',
+    chr_id INT NOT NULL DEFAULT 1,
+    start INT NOT NULL DEFAULT 1,
+    end INT NOT NULL DEFAULT 1,
+    strand TEXT NOT NULL DEFAULT '.',
+     
+    FOREIGN KEY (biotype_id) REFERENCES biotypes(id),
+    FOREIGN KEY (chr_id) REFERENCES chromosomes(id)
+);"""
+
+# TRANSCRIPT_TYPES_SQL = """CREATE TABLE transcript_types (
+#     id INTEGER PRIMARY KEY,
+#     public_id TEXT NOT NULL UNIQUE,
+#     name TEXT NOT NULL UNIQUE);"""
+
+TRANSCRIPTS_SQL = """CREATE TABLE transcripts (
+    id INTEGER PRIMARY KEY,
+    -- public_id TEXT NOT NULL UNIQUE,
+    gene_id INT NOT NULL,
+    biotype_id INT NOT NULL,
+    transcript_id TEXT NOT NULL DEFAULT '',
+    start INT NOT NULL DEFAULT 1,
+    end INT NOT NULL DEFAULT 1,
+    is_canonical INT NOT NULL DEFAULT 0,
+    is_longest INT NOT NULL DEFAULT 0,
+    FOREIGN KEY (gene_id) REFERENCES genes(id),
+    FOREIGN KEY (biotype_id) REFERENCES biotypes(id)
+);"""
+
+# exon ids are stored in a separate table to save space,
+# as they are often repeated across exons, cds and utrs
+# EXONS_IDS_SQL = """CREATE TABLE exon_ids (
+#     id INTEGER PRIMARY KEY,
+#     name TEXT NOT NULL UNIQUE
+# );"""
+
+FEATURE_TYPES_SQL = """CREATE TABLE feature_types (
+    id INTEGER PRIMARY KEY,
+    public_id TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL UNIQUE);"""
+
+
+# exons are ids which we associate with features,
+# where a feature can be an exon, cds, utr, start codon or stop codon
+# this is because the same exon can be associated with multiple features,
+# e.g. an exon can be both an exon and a cds, or an exon and a utr
+# EXONS_SQL = """CREATE TABLE exons (
+#     id INTEGER PRIMARY KEY,
+#     transcript_id INT NOT NULL,
+#     exon_id TEXT NOT NULL DEFAULT '',
+#     exon_number INT NOT NULL DEFAULT 1,
+#     UNIQUE(transcript_id, exon_id, exon_number),
+#     FOREIGN KEY (transcript_id) REFERENCES transcripts(id)
+# );"""
+
+FEATURES_SQL = """CREATE TABLE features (
+    id INTEGER PRIMARY KEY,
+    transcript_id INT NOT NULL,
+    feature_type_id INT NOT NULL,
+    exon_id TEXT NOT NULL DEFAULT '',
+    exon_number INT NOT NULL DEFAULT 1,
+    start INT NOT NULL DEFAULT 1,
+    end INT NOT NULL DEFAULT 1,
+    UNIQUE(transcript_id, exon_id, feature_type_id, start, end),
+    FOREIGN KEY (transcript_id) REFERENCES transcripts(id),
+    FOREIGN KEY (feature_type_id) REFERENCES feature_types(id)
+);"""
+
+feature_type_map = {
+    "exon": 1,
+    "cds": 2,
+    "utr": 3,
+    "start_codon": 4,
+    "stop_codon": 5,
+    "five_prime_utr": 6,
+    "three_prime_utr": 7,
+}
+
+# get year month day
+version = "20261112"
+
+for file_desc in files:
+    print(file_desc)
+
+    db = f"../data/modules/genome/gtf_{file_desc['version']}.v{version}.db"
+    if os.path.exists(db):
+        os.remove(db)
+
+    chromosome_map = {}
+
+    # Connect to the SQLite database
+    conn = sqlite3.connect(db)
+    cursor = conn.cursor()
+
+    cursor.execute("PRAGMA journal_mode = WAL;")
+    cursor.execute("PRAGMA foreign_keys = ON;")
+
+    cursor.execute(INFO_SQL)
+    cursor.execute(BIOTYPES_SQL)
+    cursor.execute("CREATE UNIQUE INDEX idx_info_public_id ON info(public_id);")
+    cursor.execute("CREATE UNIQUE INDEX idx_biotypes_name ON biotypes(LOWER(name));")
+
+    cursor.execute(CHROMOSOMES_SQL)
+    cursor.execute(
+        "CREATE UNIQUE INDEX idx_chromosomes_public_id ON chromosomes(public_id);"
+    )
+    cursor.execute(
+        "CREATE UNIQUE INDEX idx_chromosomes_name ON chromosomes(LOWER(name));"
+    )
+
+    cursor.execute(GENES_SQL)
+    # cursor.execute("CREATE UNIQUE INDEX idx_genes_public_id ON genes(public_id);")
+    cursor.execute("CREATE INDEX idx_genes_gene_id ON genes(LOWER(gene_id));")
+    cursor.execute(
+        "CREATE INDEX idx_genes_official_gene_id ON genes(LOWER(official_gene_id));"
+    )
+    cursor.execute("CREATE INDEX idx_genes_symbol ON genes(LOWER(symbol));")
+    cursor.execute("CREATE INDEX idx_genes_strand ON genes(strand);")
+    cursor.execute("CREATE INDEX idx_genes_chr_id ON genes(chr_id);")
+    cursor.execute("CREATE INDEX idx_genes_biotype_id ON genes(biotype_id);")
+
+    cursor.execute(TRANSCRIPTS_SQL)
+    #        cursor.execute(
+    #            "CREATE UNIQUE INDEX idx_transcripts_public_id ON transcripts(public_id);"
+    #        )
+    cursor.execute(
+        "CREATE INDEX idx_transcripts_transcript_id ON transcripts(LOWER(transcript_id));"
+    )
+    cursor.execute("CREATE INDEX idx_transcripts_start_end ON transcripts(start, end);")
+    cursor.execute(
+        "CREATE INDEX idx_transcripts_is_canonical ON transcripts(is_canonical);"
+    )
+    cursor.execute(
+        "CREATE INDEX idx_transcripts_is_longest ON transcripts(is_longest);"
+    )
+    cursor.execute("CREATE INDEX idx_transcripts_gene_id ON transcripts(gene_id);")
+    cursor.execute(
+        "CREATE INDEX idx_transcripts_biotype_id ON transcripts(biotype_id);"
+    )
+
+    # cursor.execute(EXONS_IDS_SQL)
+    cursor.execute(FEATURE_TYPES_SQL)
+    cursor.execute(
+        "CREATE UNIQUE INDEX idx_feature_types_public_id ON feature_types(public_id);"
+    )
+    cursor.execute(
+        "CREATE UNIQUE INDEX idx_feature_types_name ON feature_types(LOWER(name));"
+    )
+
+    # cursor.execute(EXONS_SQL)
+    # cursor.execute("CREATE INDEX idx_exons_exon_id ON exons(LOWER(exon_id));")
+    # cursor.execute("CREATE INDEX idx_exons_transcript_id ON exons(transcript_id);")
+
+    cursor.execute(FEATURES_SQL)
+    cursor.execute("CREATE INDEX idx_features_start_end ON features(start, end);")
+    cursor.execute(
+        "CREATE INDEX idx_features_transcript_id ON features(transcript_id);"
+    )
+    cursor.execute("CREATE INDEX idx_features_exon_id ON features(exon_id);")
+    cursor.execute(
+        "CREATE INDEX idx_features_feature_type_id ON features(feature_type_id);"
+    )
+
+    cursor.execute(
+        f"INSERT INTO info (public_id, genome, assembly, name, version, file) VALUES(?, ?, ?, ?, ?, ?)",
+        (
+            str(uuid.uuid7()),
+            file_desc["genome"],
+            file_desc["assembly"],
+            file_desc["version"],
+            version,
+            file_desc["file"],
+        ),
+    )
+
+    cursor.execute(
+        f"INSERT INTO biotypes (id, public_id, name) VALUES (1, '{uuid.uuid7()}', 'NA');"
+    )
+
+    biotypes_map = {"NA": 1}
+
+    cursor.execute(
+        f"INSERT INTO feature_types (id, public_id, name) VALUES (1, '{uuid.uuid7()}', 'exon');"
+    )
+    cursor.execute(
+        f"INSERT INTO feature_types (id, public_id, name) VALUES (2, '{uuid.uuid7()}', 'cds');"
+    )
+    cursor.execute(
+        f"INSERT INTO feature_types (id, public_id, name) VALUES (3, '{uuid.uuid7()}', 'utr');"
+    )
+
+    cursor.execute(
+        f"INSERT INTO feature_types (id, public_id, name) VALUES (4, '{uuid.uuid7()}', 'start_codon');"
+    )
+
+    cursor.execute(
+        f"INSERT INTO feature_types (id, public_id, name) VALUES (5, '{uuid.uuid7()}', 'stop_codon');"
+    )
+
+    cursor.execute(
+        f"INSERT INTO feature_types (id, public_id, name) VALUES (6, '{uuid.uuid7()}', 'five_prime_utr');"
+    )
+    cursor.execute(
+        f"INSERT INTO feature_types (id, public_id, name) VALUES (7, '{uuid.uuid7()}', 'three_prime_utr');"
+    )
+
+    record = 1
+
+    gene_id = ""
+    official_gene_id = ""
+    symbol = ""
+    gene_biotype = ""
+    transcript_id = ""
+    transcript_biotype = ""
+    exon_id = ""
+    chr = ""
+    start = 0
+    end = 0
+    stranded_start = 0
+    stranded_end = 0
+
+    chr_map = {}
+    gene_map = {}
+
+    exon_map = {}
+    transcript_map = {}
+
+    with gzip.open(
+        file_desc["file"],
+        "rt",
+    ) as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+
+            tokens = line.strip().split("\t")
+
+            level = tokens[2].lower()
+
+            # if 'tag "basic"' not in line:
+            #    continue
+
+            # print(line)
+
+            tags = set()
+
+            if (
+                "Ensembl_canonical" in line
+                or "appris_principal" in line
+                or "MANE_select" in line
+            ):
+                tags.add("canonical:true")
+                is_canonical = 1
+            else:
+                is_canonical = 0
+
+            # gene
+            matcher = re.search(r'gene_id "(.+?)";', tokens[8])
+
+            if matcher:
+                # remove version
+                gene_id = re.sub(r"\..+", "", matcher.group(1))
+
+                if gene_id not in gene_map:
+                    gene_map[gene_id] = len(gene_map) + 1
+
+            matcher = re.search(r'gene_name "(.+?)";', tokens[8])
+
+            if matcher:
+                symbol = matcher.group(1)
+                is_ensg = 1 if symbol.startswith("ENSG") else 0
+
+            # assume it doesn't have an official id
+            official_gene_id = None
+
+            if file_desc["genome"] == "Human":
+                matcher = re.search(r'hgnc_id "(.+?)";', tokens[8])
+            else:
+                matcher = re.search(r'mgi_id "(.+?)";', tokens[8])
+
+            if matcher:
+                official_gene_id = matcher.group(1)
+                tags.add(f"official_gene_id:{official_gene_id}")
+
+            # gene_type
+            gene_biotype = "NA"
+            matcher = re.search(r'gene_type "(.+?)";', tokens[8])
+
+            if matcher:
+                gene_biotype = re.sub(r"\..+", "", matcher.group(1))
+                tags.add(f"gene_type:{gene_biotype}")
+
+            # transcript
+            matcher = re.search(r'transcript_id "(.+?)";', tokens[8])
+
+            if matcher:
+                transcript_id = re.sub(r"\..+", "", matcher.group(1))
+
+                if transcript_id not in transcript_map:
+                    transcript_map[transcript_id] = len(transcript_map) + 1
+
+            transcript_biotype = "NA"
+            matcher = re.search(r'transcript_type "(.+?)";', tokens[8])
+
+            if matcher:
+                transcript_biotype = re.sub(r"\..+", "", matcher.group(1))
+                tags.add(f"transcript_type:{transcript_biotype}")
+
+            # exon
+
+            matcher = re.search(r"exon_number (\d+);", tokens[8])
+
+            if matcher:
+                exon_number = int(matcher.group(1))
+
+            matcher = re.search(r'exon_id "(.+?)";', tokens[8])
+
+            if matcher:
+                exon_id = re.sub(r"\..+", "", matcher.group(1))
+
+                if exon_id not in exon_map:
+                    exon_map[exon_id] = len(exon_map) + 1
+
+            if gene_biotype not in biotypes_map:
+                biotypes_map[gene_biotype] = len(biotypes_map) + 1
+
+                cursor.execute(
+                    "INSERT INTO biotypes (id, public_id, name) VALUES (?, ?, ?)",
+                    (
+                        biotypes_map[gene_biotype],
+                        str(uuid.uuid7()),
+                        gene_biotype,
+                    ),
+                )
+
+            if transcript_biotype not in biotypes_map:
+                biotypes_map[transcript_biotype] = len(biotypes_map) + 1
+
+                cursor.execute(
+                    "INSERT INTO biotypes (id, public_id, name) VALUES (?, ?, ?)",
+                    (
+                        biotypes_map[transcript_biotype],
+                        str(uuid.uuid7()),
+                        transcript_biotype,
+                    ),
+                )
+
+            chr = tokens[0]
+
+            if chr not in chr_map:
+                chr_map[chr] = len(chr_map) + 1
+
+                cursor.execute(
+                    "INSERT INTO chromosomes (id, public_id, name) VALUES (?, ?, ?)",
+                    (
+                        chr_map[chr],
+                        str(uuid.uuid7()),
+                        chr,
+                    ),
+                )
+
+            chr_id = chr_map[chr]
+
+            start = int(tokens[3])
+            end = int(tokens[4])
+            # mid = int((end + start) / 2)
+            strand = tokens[6]
+
+            # invert coordinates to make searching easier
+            if strand == "-":
+                stranded_start = end
+                # stranded_end = start
+            else:
+                stranded_start = start
+                # stranded_end = end
+
+            tag_str = ",".join(sorted(tags))
+
+            if level == "gene":
+                cursor.execute(
+                    "INSERT INTO genes (id, gene_id, official_gene_id, symbol, chr_id, start, end, strand, biotype_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+                    (
+                        gene_map[gene_id],
+                        # str(uuid.uuid7()),
+                        gene_id,
+                        official_gene_id,
+                        symbol,
+                        chr_id,
+                        start,
+                        end,
+                        strand,
+                        biotypes_map[gene_biotype],
+                    ),
+                )
+                # record = cursor.lastrowid
+            elif level == "transcript":
+
+                cursor.execute(
+                    "INSERT INTO transcripts (id, gene_id, transcript_id, start, end, is_canonical, biotype_id) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+                    (
+                        transcript_map[transcript_id],
+                        # str(uuid.uuid7()),
+                        gene_map[gene_id],
+                        transcript_id,
+                        start,
+                        end,
+                        is_canonical,
+                        biotypes_map[transcript_biotype],
+                    ),
+                )
+                # record = cursor.lastrowid
+            else:
+
+                # cursor.execute(
+                #     "INSERT INTO exons (id, transcript_id, exon_id, exon_number) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
+                #     (
+                #         exon_map[exon_id],
+                #         transcript_map[transcript_id],
+                #         exon_id,
+                #         exon_number,
+                #     ),
+                # )
+
+                if level in feature_type_map:
+
+                    cursor.execute(
+                        "INSERT INTO features (transcript_id, feature_type_id, exon_id, exon_number, start, end) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+                        (
+                            transcript_map[transcript_id],
+                            feature_type_map[level],
+                            exon_id,
+                            exon_number,
+                            start,
+                            end,
+                        ),
+                    )
+
+            record += 1
+
+    # work out who is longest transcript per gene
+    print("Finding longest transcripts...")
+
+    cursor.execute(
+        f"""
+        WITH max_lengths AS (
+            SELECT 
+                t.gene_id,
+                t.transcript_id,
+                ROW_NUMBER() OVER (PARTITION BY t.gene_id ORDER BY ABS(t.end - t.start) DESC) AS rank
+            FROM transcripts t
+        )
+        SELECT gene_id, transcript_id FROM max_lengths
+        WHERE rank = 1
+        ORDER BY gene_id, transcript_id;
+        """,
+    )
+
+    rows = cursor.fetchall()
+
+    queries = []
+
+    for row in rows:
+        # print(row)
+        queries.append({"gene_id": row[0], "transcript_id": row[1]})
+
+    cursor.executemany(
+        "UPDATE transcripts SET is_longest = 1 WHERE gene_id = :gene_id AND transcript_id = :transcript_id",
+        queries,
+    )
+
+    print(len(queries), "transcripts set as longest")
+
+    # if not canonical, set longest as canonical
+    print("Finding longest transcripts to make canonical...")
+
+    cursor.execute(
+        f"""
+        WITH max_lengths AS (
+            SELECT 
+                t.gene_id,
+                t.transcript_id,
+                ROW_NUMBER() OVER (PARTITION BY t.gene_id ORDER BY ABS(t.end - t.start) DESC) AS rank
+            FROM transcripts t
+            WHERE t.is_canonical = 0
+        )
+        SELECT gene_id, transcript_id FROM max_lengths
+        WHERE rank = 1
+        ORDER BY gene_id, transcript_id;
+        """,
+    )
+
+    rows = cursor.fetchall()
+
+    queries = []
+
+    for row in rows:
+        # print(row)
+        queries.append({"gene_id": row[0], "transcript_id": row[1]})
+
+    cursor.executemany(
+        "UPDATE transcripts SET is_canonical = 1 WHERE gene_id = :gene_id AND transcript_id = :transcript_id",
+        queries,
+    )
+
+    print(len(queries), "transcripts set as canonical")
+
+    # Commit and close
+    conn.commit()
+    conn.close()

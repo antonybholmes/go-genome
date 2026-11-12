@@ -68,6 +68,93 @@ func (f *Feature) Exons() []*Feature {
 	return f.ChildrenOf("exon")
 }
 
+// InExon checks if the given location overlaps with any exon of the feature.
+func (f *Feature) InExon(location *dna.Location) bool {
+	// recursively get all exons using a stack
+	stack := []*Feature{f}
+
+	for len(stack) > 0 {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if current.Type == Exon {
+			exonLoc, err := dna.NewLocation(f.Seqname, current.Start, current.End)
+			if err == nil && exonLoc.Overlaps(location) {
+				return true
+			}
+		}
+
+		for _, child := range current.Children {
+			stack = append(stack, child)
+
+		}
+	}
+
+	return false
+}
+
+// InExon checks if the given location overlaps with any exon of the feature.
+func (f *Feature) IsIntragenic(location *dna.Location) bool {
+	// recursively get all exons using a stack
+	stack := []*Feature{f}
+
+	for len(stack) > 0 {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if current.Type == Transcript {
+			exonLoc, err := dna.NewLocation(f.Seqname, current.Start, current.End)
+			if err == nil && exonLoc.Overlaps(location) {
+				return true
+			}
+		}
+
+		for _, child := range current.Children {
+			stack = append(stack, child)
+		}
+	}
+
+	return false
+}
+
+func (f *Feature) InPromoter(location *dna.Location, prom *dna.PromoterRegion) bool {
+	// recursively get all exons using a stack
+	stack := []*Feature{f}
+
+	for len(stack) > 0 {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if current.Type == Transcript {
+			start := current.Start
+			 
+			if f.Strand == '-' {
+				start = current.End
+			}
+
+			if f.Strand == '+' {
+				end = start + prom.Downstream()
+				start -= prom.Upstream()
+			} else {
+				end = start + prom.Upstream()
+				start -= prom.Downstream()
+			}
+
+			exonLoc, err := dna.NewLocation(f.Seqname, start, end)
+			
+			if err == nil && exonLoc.Overlaps(location) {
+				return true
+			}
+		}
+
+		for _, child := range current.Children {
+			stack = append(stack, child)
+		}
+	}
+
+	return false
+}
+
+((g.strand = '+') AND (:start <= t.start + :prom3p) AND (:end >= t.start - :prom5p)) OR
+	// 			((g.strand = '-') AND (:start <= t.end + :prom5p) AND (:end >= t.end - :prom3p))
+
 func (f *Feature) Length() int {
 	return f.End - f.Start + 1
 }
@@ -141,7 +228,7 @@ func (gdb *GtfTabixDB) OverlappingGenes(location *dna.Location,
 		return nil, err
 	}
 
-	features, err := toGenomicFeature(roots, levels, canonicalMode, annotationMode)
+	features, err := toGenomicFeature(location, roots, levels, canonicalMode, annotationMode)
 
 	if err != nil {
 		return nil, err
@@ -151,7 +238,11 @@ func (gdb *GtfTabixDB) OverlappingGenes(location *dna.Location,
 }
 
 // Convert gtf features from a file into standardized genomic features
-func toGenomicFeature(feats []*Feature, levels string, canonicalMode bool, annotationMode bool) ([]*GenomicFeature, error) {
+func toGenomicFeature(location *dna.Location,
+	feats []*Feature,
+	levels string,
+	canonicalMode bool,
+	annotationMode bool) ([]*GenomicFeature, error) {
 	var currentGene *GenomicFeature
 	var currentTranscript *GenomicFeature
 
@@ -175,7 +266,7 @@ func toGenomicFeature(feats []*Feature, levels string, canonicalMode bool, annot
 		strand := feat.Strand
 		geneSymbol := feat.GeneName()
 		featureType := feat.Type
-
+		inExon := feat.InExon(location)
 		isCanonical := feat.IsCanonical()
 
 		//geneBiotype := feat.Biotype()
@@ -213,7 +304,7 @@ func toGenomicFeature(feats []*Feature, levels string, canonicalMode bool, annot
 			// add extra properties if in annotation mode
 			if annotationMode {
 				//currentGene.InPromoter = currentGene.InPromoter || inPromoter
-				//currentGene.InExon = currentGene.InExon || inExon
+				currentGene.InExon = currentGene.InExon || inExon
 				//currentGene.IsIntragenic = currentGene.IsIntragenic || isIntragenic
 				//currentGene.Label = MakePromLabel(currentGene.InPromoter, currentGene.InExon, currentGene.IsIntragenic)
 
@@ -269,7 +360,7 @@ func toGenomicFeature(feats []*Feature, levels string, canonicalMode bool, annot
 		if currentTranscript != nil {
 			// these properties may be updated as we see more rows and we find
 			// we are in an exon
-			//currentTranscript.InExon = currentTranscript.InExon || inExon
+			currentTranscript.InExon = currentTranscript.InExon || inExon
 			currentTranscript.Label = MakePromLabel(currentTranscript.InPromoter,
 				currentTranscript.InExon,
 				currentTranscript.IsIntragenic)
@@ -301,10 +392,10 @@ func toGenomicFeature(feats []*Feature, levels string, canonicalMode bool, annot
 				ExonNumber: exonNumber,
 			}
 
-			// if annotationMode {
-			// 	currentFeature.InExon = inExon
-			// 	currentFeature.Label = MakePromLabel(inPromoter, inExon, isIntragenic)
-			// }
+			if annotationMode {
+				currentFeature.InExon = inExon
+				// 	currentFeature.Label = MakePromLabel(inPromoter, inExon, isIntragenic)
+			}
 
 			if currentTranscript != nil {
 				// lazy initialize children slice only if we have exons to add

@@ -119,17 +119,19 @@ func (f *Feature) InPromoter(location *dna.Location, prom *dna.PromoterRegion) b
 	// recursively get all exons using a stack
 	stack := []*Feature{f}
 
+	var end int
+
 	for len(stack) > 0 {
 		current := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 		if current.Type == Transcript {
 			start := current.Start
-			 
-			if f.Strand == '-' {
+
+			if f.Strand == "-" {
 				start = current.End
 			}
 
-			if f.Strand == '+' {
+			if f.Strand == "+" {
 				end = start + prom.Downstream()
 				start -= prom.Upstream()
 			} else {
@@ -138,7 +140,7 @@ func (f *Feature) InPromoter(location *dna.Location, prom *dna.PromoterRegion) b
 			}
 
 			exonLoc, err := dna.NewLocation(f.Seqname, start, end)
-			
+
 			if err == nil && exonLoc.Overlaps(location) {
 				return true
 			}
@@ -151,9 +153,6 @@ func (f *Feature) InPromoter(location *dna.Location, prom *dna.PromoterRegion) b
 
 	return false
 }
-
-((g.strand = '+') AND (:start <= t.start + :prom3p) AND (:end >= t.start - :prom5p)) OR
-	// 			((g.strand = '-') AND (:start <= t.end + :prom5p) AND (:end >= t.end - :prom3p))
 
 func (f *Feature) Length() int {
 	return f.End - f.Start + 1
@@ -228,7 +227,12 @@ func (gdb *GtfTabixDB) OverlappingGenes(location *dna.Location,
 		return nil, err
 	}
 
-	features, err := toGenomicFeature(location, roots, levels, canonicalMode, annotationMode)
+	features, err := toGenomicFeature(location,
+		prom,
+		roots,
+		levels,
+		canonicalMode,
+		annotationMode)
 
 	if err != nil {
 		return nil, err
@@ -239,6 +243,7 @@ func (gdb *GtfTabixDB) OverlappingGenes(location *dna.Location,
 
 // Convert gtf features from a file into standardized genomic features
 func toGenomicFeature(location *dna.Location,
+	prom *dna.PromoterRegion,
 	feats []*Feature,
 	levels string,
 	canonicalMode bool,
@@ -267,6 +272,7 @@ func toGenomicFeature(location *dna.Location,
 		geneSymbol := feat.GeneName()
 		featureType := feat.Type
 		inExon := feat.InExon(location)
+		inPromoter := feat.InPromoter(location, prom)
 		isCanonical := feat.IsCanonical()
 
 		//geneBiotype := feat.Biotype()
@@ -303,7 +309,7 @@ func toGenomicFeature(location *dna.Location,
 
 			// add extra properties if in annotation mode
 			if annotationMode {
-				//currentGene.InPromoter = currentGene.InPromoter || inPromoter
+				currentGene.InPromoter = currentGene.InPromoter || inPromoter
 				currentGene.InExon = currentGene.InExon || inExon
 				//currentGene.IsIntragenic = currentGene.IsIntragenic || isIntragenic
 				//currentGene.Label = MakePromLabel(currentGene.InPromoter, currentGene.InExon, currentGene.IsIntragenic)
@@ -340,11 +346,11 @@ func toGenomicFeature(location *dna.Location,
 				//IsLongest:   isLongest,
 			}
 
-			// if annotationMode {
-			// 	currentTranscript.InPromoter = inPromoter
-			// 	currentTranscript.IsIntragenic = isIntragenic
-			// 	currentTranscript.TssDist = tssDist
-			// }
+			if annotationMode {
+				currentTranscript.InPromoter = currentTranscript.InPromoter || inPromoter
+				// 	currentTranscript.IsIntragenic = isIntragenic
+				// 	currentTranscript.TssDist = tssDist
+			}
 
 			if currentGene != nil {
 				if currentGene.Children == nil {
@@ -394,7 +400,7 @@ func toGenomicFeature(location *dna.Location,
 
 			if annotationMode {
 				currentFeature.InExon = inExon
-				// 	currentFeature.Label = MakePromLabel(inPromoter, inExon, isIntragenic)
+				currentFeature.Label = MakePromLabel(inPromoter, inExon, isIntragenic)
 			}
 
 			if currentTranscript != nil {

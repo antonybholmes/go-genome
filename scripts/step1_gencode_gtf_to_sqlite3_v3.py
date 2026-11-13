@@ -14,10 +14,36 @@ import os
 import re
 import sqlite3
 import sys
+import zlib
 
 import numpy as np
 import pandas as pd
 import uuid_utils as uuid
+
+VERSION = re.compile(r"\.\d+")
+
+
+def strip_version(x: str) -> str:
+    return VERSION.sub("", x, count=1)
+
+
+def compress(s: str) -> bytes:
+    return zlib.compress(s.encode("utf-8"), level=6)
+
+
+def standardize_attributes(attr: str) -> str:
+    attrs = collections.defaultdict(list)
+
+    for field in attr.strip().split(";"):
+        field = field.strip()
+        if not field:
+            continue
+        key, _, val = field.partition(" ")
+        val = val.strip().strip('"')
+        attrs[key].append(val)
+
+    return ";".join([f'{k}={",".join(sorted(attrs[k]))}' for k in sorted(attrs)])
+
 
 tables = ["genes"]
 
@@ -121,6 +147,12 @@ FEATURES_SQL = """CREATE TABLE features (
     FOREIGN KEY (feature_type_id) REFERENCES feature_types(id)
 );"""
 
+ATTRIBUTES_SQL = """CREATE TABLE attributes (
+    id INTEGER PRIMARY KEY,
+    attributes TEXT
+);"""
+
+
 feature_type_map = {
     "exon": 1,
     "cds": 2,
@@ -216,6 +248,8 @@ for file_desc in files:
         "CREATE INDEX idx_features_feature_type_id ON features(feature_type_id);"
     )
 
+    cursor.execute(ATTRIBUTES_SQL)
+
     cursor.execute(
         f"INSERT INTO info (public_id, genome, assembly, name, version, file) VALUES(?, ?, ?, ?, ?, ?)",
         (
@@ -275,10 +309,11 @@ for file_desc in files:
     stranded_end = 0
 
     chr_map = {}
-    gene_map = {}
 
-    exon_map = {}
-    transcript_map = {}
+    # gene_map = {}
+    # transcript_map = {}
+    # exon_map = {}
+    id_map = {}
 
     with gzip.open(
         file_desc["file"],
@@ -314,10 +349,10 @@ for file_desc in files:
 
             if matcher:
                 # remove version
-                gene_id = re.sub(r"\..+", "", matcher.group(1))
+                gene_id = strip_version(matcher.group(1))
 
-                if gene_id not in gene_map:
-                    gene_map[gene_id] = len(gene_map) + 1
+                # if gene_id not in gene_map:
+                #    gene_map[gene_id] = len(gene_map) + 1
 
             matcher = re.search(r'gene_name "(.+?)";', tokens[8])
 
@@ -349,10 +384,10 @@ for file_desc in files:
             matcher = re.search(r'transcript_id "(.+?)";', tokens[8])
 
             if matcher:
-                transcript_id = re.sub(r"\..+", "", matcher.group(1))
+                transcript_id = strip_version(matcher.group(1))
 
-                if transcript_id not in transcript_map:
-                    transcript_map[transcript_id] = len(transcript_map) + 1
+                # if transcript_id not in transcript_map:
+                #    transcript_map[transcript_id] = len(transcript_map) + 1
 
             transcript_biotype = "NA"
             matcher = re.search(r'transcript_type "(.+?)";', tokens[8])
@@ -371,10 +406,10 @@ for file_desc in files:
             matcher = re.search(r'exon_id "(.+?)";', tokens[8])
 
             if matcher:
-                exon_id = re.sub(r"\..+", "", matcher.group(1))
+                exon_id = strip_version(matcher.group(1))
 
-                if exon_id not in exon_map:
-                    exon_map[exon_id] = len(exon_map) + 1
+                # if exon_id not in exon_map:
+                #    exon_map[exon_id] = len(exon_map) + 1
 
             if gene_biotype not in biotypes_map:
                 biotypes_map[gene_biotype] = len(biotypes_map) + 1
@@ -431,12 +466,16 @@ for file_desc in files:
 
             tag_str = ",".join(sorted(tags))
 
+            attrs = standardize_attributes(tokens[8])
+
             if level == "gene":
+                if gene_id not in id_map:
+                    id_map[gene_id] = record
+
                 cursor.execute(
                     "INSERT INTO genes (id, gene_id, official_gene_id, symbol, chr_id, start, end, strand, biotype_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
                     (
-                        gene_map[gene_id],
-                        # str(uuid.uuid7()),
+                        record,
                         gene_id,
                         official_gene_id,
                         symbol,
@@ -449,13 +488,14 @@ for file_desc in files:
                 )
                 # record = cursor.lastrowid
             elif level == "transcript":
+                if transcript_id not in id_map:
+                    id_map[transcript_id] = record
 
                 cursor.execute(
                     "INSERT INTO transcripts (id, gene_id, transcript_id, start, end, is_canonical, biotype_id) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
                     (
-                        transcript_map[transcript_id],
-                        # str(uuid.uuid7()),
-                        gene_map[gene_id],
+                        record,
+                        id_map[gene_id],
                         transcript_id,
                         start,
                         end,
@@ -465,7 +505,6 @@ for file_desc in files:
                 )
                 # record = cursor.lastrowid
             else:
-
                 # cursor.execute(
                 #     "INSERT INTO exons (id, transcript_id, exon_id, exon_number) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
                 #     (
@@ -476,12 +515,27 @@ for file_desc in files:
                 #     ),
                 # )
 
-                if level in feature_type_map:
+                # if level not in feature_type_map:
+                #    continue
 
+                if level not in feature_type_map:
+                    feature_type_map[level] = len(feature_type_map) + 1
+                    print("Adding new feature type:", level)
                     cursor.execute(
-                        "INSERT INTO features (transcript_id, feature_type_id, exon_id, exon_number, start, end) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+                        "INSERT INTO feature_types (id, public_id, name) VALUES (?, ?, ?)",
                         (
-                            transcript_map[transcript_id],
+                            feature_type_map[level],
+                            str(uuid.uuid7()),
+                            level,
+                        ),
+                    )
+
+                try:
+                    cursor.execute(
+                        "INSERT INTO features (id, transcript_id, feature_type_id, exon_id, exon_number, start, end) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+                        (
+                            record,
+                            id_map[transcript_id],
                             feature_type_map[level],
                             exon_id,
                             exon_number,
@@ -489,6 +543,18 @@ for file_desc in files:
                             end,
                         ),
                     )
+                except Exception as e:
+                    print("Error inserting feature:", e)
+                    print(line)
+                    print(feature_type_map[level], transcript_id, id_map[transcript_id])
+
+            # cursor.execute(
+            #     "INSERT INTO attributes (id, attributes) VALUES (?, ?)",
+            #     (
+            #         record,
+            #         attrs,
+            #     ),
+            # )
 
             record += 1
 

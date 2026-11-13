@@ -188,13 +188,15 @@ func toGenomicFeature(location *dna.Location,
 			}
 
 			currentGene = &genome.GenomicFeature{Id: gid,
-				Location: location,
-				Type:     feat.Type,
-				Symbol:   geneSymbol,
-				GeneId:   geneId,
-				Strand:   strand,
-				Biotype:  biotype,
+				//Location: location,
+				Type:    feat.Type,
+				Symbol:  geneSymbol,
+				GeneId:  geneId,
+				Strand:  strand,
+				Biotype: biotype,
 			}
+
+			genome.AddLocationToFeature(currentGene, location)
 
 			ret = append(ret, currentGene)
 
@@ -209,7 +211,7 @@ func toGenomicFeature(location *dna.Location,
 		// also only add if we have a current gene
 		// also only add if we don't already have this transcript
 		if strings.Contains(levels, "transcript") &&
-			(currentTranscript == nil || currentTranscript.Transcript != transcriptId) {
+			(currentTranscript == nil || currentTranscript.TranscriptId != transcriptId) {
 
 			isCanonical := feat.IsCanonical()
 
@@ -243,12 +245,12 @@ func toGenomicFeature(location *dna.Location,
 			// isLongest cannot be set from tabix gtf file since this
 			// information is not provided in the GTF rows
 			currentTranscript = &genome.GenomicFeature{Id: gid,
-				Location: location,
+				//Location: location,
 				//Strand:       strand,
-				Type:       genome.TranscriptLevel,
-				Symbol:     geneSymbol,
-				GeneId:     geneId,
-				Transcript: transcriptId,
+				Type:         genome.TranscriptLevel,
+				Symbol:       geneSymbol,
+				GeneId:       geneId,
+				TranscriptId: transcriptId,
 				//Biotype:      transcriptBiotype,
 				IsCanonical:  isCanonical,
 				IsIntragenic: isIntragenic,
@@ -256,6 +258,7 @@ func toGenomicFeature(location *dna.Location,
 				//IsLongest:   isLongest,
 				TssDist: tssDist,
 			}
+			genome.AddLocationToFeature(currentTranscript, location)
 
 			if currentGene != nil {
 				currentGene.InPromoter = currentGene.InPromoter || inPromoter
@@ -307,15 +310,17 @@ func toGenomicFeature(location *dna.Location,
 			inExon := feat.InExon(location)
 
 			currentFeature = &genome.GenomicFeature{Id: gid,
-				Location:   location,
-				Type:       featureType,
-				Symbol:     geneSymbol,
-				GeneId:     geneId,
-				Transcript: transcriptId,
-				Exon:       exonId,
-				ExonNumber: exonNumber,
-				InExon:     inExon,
+				//Location:     location,
+				Type:         featureType,
+				Symbol:       geneSymbol,
+				GeneId:       geneId,
+				TranscriptId: transcriptId,
+				ExonId:       exonId,
+				ExonNumber:   exonNumber,
+				InExon:       inExon,
 			}
+
+			genome.AddLocationToFeature(currentFeature, location)
 
 			if currentTranscript != nil {
 				currentFeature.InPromoter = currentTranscript.InPromoter

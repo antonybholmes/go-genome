@@ -367,7 +367,7 @@ func (gdb *GtfSqliteDB) OverlappingGenes(location *dna.Location,
 
 	defer geneRows.Close()
 
-	return rowsToRecords(geneRows, levels, canonicalMode, annotationMode)
+	return rowsToFeatures(geneRows, levels, canonicalMode, annotationMode)
 }
 
 // func (gdb *GtfSqliteDB) WithinGenes(location *dna.Location,
@@ -411,7 +411,7 @@ func (gdb *GtfSqliteDB) IntragenicFeatures(location *dna.Location,
 
 	defer rows.Close()
 
-	return rowsToRecords(rows, levels, false, true)
+	return rowsToFeatures(rows, levels, false, true)
 }
 
 func (gdb *GtfSqliteDB) InExon(location *dna.Location,
@@ -463,11 +463,11 @@ func (gdb *GtfSqliteDB) ClosestGenes(location *dna.Location,
 
 	defer rows.Close()
 
-	return rowsToRecords(rows, genome.GeneLevel, false, true)
+	return rowsToFeatures(rows, genome.GeneLevel, false, true)
 
 }
 
-func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool, annotationMode bool) ([]*genome.GenomicFeature, error) {
+func rowsToFeatures(rows *sql.Rows, levels string, canonicalMode bool, annotationMode bool) ([]*genome.GenomicFeature, error) {
 	var gid int
 	var chr string
 	var geneStart int
@@ -577,14 +577,15 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool, annotation
 			}
 
 			currentGene = &genome.GenomicFeature{Id: gid,
-				Location: location,
-				Type:     genome.GeneLevel,
-				Symbol:   geneSymbol,
-				GeneId:   geneId,
+				Type:   genome.FeatureTypeGene,
+				Symbol: geneSymbol,
+				GeneId: geneId,
 				//Strand:   strand,
 				Biotype: geneBiotype,
 				TssDist: math.MaxInt,
 			}
+
+			genome.AddLocationToFeature(currentGene, location)
 
 			ret = append(ret, currentGene)
 		}
@@ -609,7 +610,7 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool, annotation
 		// also only add if we have a current gene
 		// also only add if we don't already have this transcript
 		if strings.Contains(levels, "transcript") &&
-			(currentTranscript == nil || currentTranscript.Transcript != transcriptId) &&
+			(currentTranscript == nil || currentTranscript.TranscriptId != transcriptId) &&
 			(!canonicalMode || isCanonical) {
 
 			location, err := dna.NewStrandedLocation(chr, transcriptStart, transcriptEnd, strand)
@@ -620,17 +621,19 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool, annotation
 
 			// set the properties that will not change for a transcript
 			currentTranscript = &genome.GenomicFeature{Id: gid,
-				Location: location,
+				//Location: location,
 				//Strand:       strand,
-				Type:       genome.TranscriptLevel,
-				Symbol:     geneSymbol,
-				GeneId:     geneId,
-				Transcript: transcriptId,
+				Type: genome.FeatureTypeTranscript,
+				//Symbol: geneSymbol,
+				//GeneId:       geneId,
+				TranscriptId: transcriptId,
 				//Biotype:      transcriptBiotype,
 				IsCanonical: isCanonical,
 				//IsLongest:   isLongest,
 				TssDist: tssDist,
 			}
+
+			genome.AddLocationToFeature(currentTranscript, location)
 
 			if annotationMode {
 				currentTranscript.InPromoter = inPromoter
@@ -678,14 +681,16 @@ func rowsToRecords(rows *sql.Rows, levels string, canonicalMode bool, annotation
 			}
 
 			currentFeature = &genome.GenomicFeature{Id: gid,
-				Location:   location,
-				Type:       featureType,
-				Symbol:     geneSymbol,
-				GeneId:     geneId,
-				Transcript: transcriptId,
-				Exon:       exonId,
+				//Location: location,
+				Type: featureType,
+				//Symbol:   geneSymbol,
+				//GeneId:       geneId,
+				//TranscriptId: transcriptId,
+				ExonId:     exonId,
 				ExonNumber: exonNumber,
 			}
+
+			genome.AddLocationToFeature(currentFeature, location)
 
 			if annotationMode {
 				currentFeature.InExon = inExon
@@ -755,8 +760,8 @@ func MakeInExonsSql(query, table string, exons []int, namedArgs *[]any) string {
 // SortFeaturesByPos sorts features in place by chr, start, end
 func SortFeaturesByPos(features []*genome.GenomicFeature) {
 	slices.SortFunc(features, func(a, b *genome.GenomicFeature) int {
-		ci := dna.ChromToInt(a.Location.Chr())
-		cj := dna.ChromToInt(b.Location.Chr())
+		ci := dna.ChromToInt(a.Chr)
+		cj := dna.ChromToInt(b.Chr)
 
 		// on different chrs so sort by chr
 		if ci != cj {
@@ -764,11 +769,11 @@ func SortFeaturesByPos(features []*genome.GenomicFeature) {
 		}
 
 		// same chr so sort by position
-		if a.Location.Start() != b.Location.Start() {
-			return int(a.Location.Start()) - int(b.Location.Start())
+		if a.Start != b.Start {
+			return int(a.Start) - int(b.Start)
 		}
 
 		// same start so sort by end
-		return int(a.Location.End()) - int(b.Location.End())
+		return int(a.End) - int(b.End)
 	})
 }

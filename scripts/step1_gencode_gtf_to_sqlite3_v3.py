@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 import uuid_utils as uuid
 
-VERSION = re.compile(r"\.\d+")
+VERSION = re.compile(r"\.\d+(_\d+)?")
 
 
 def strip_version(x: str) -> str:
@@ -48,9 +48,6 @@ def standardize_attributes(attr: str) -> str:
 tables = ["genes"]
 
 level_map = {"gene": 1, "transcript": 2, "exon": 3}
-
-with open("files.json", "r") as f:
-    files = json.load(f)
 
 
 INFO_SQL = """CREATE TABLE info (id 
@@ -153,23 +150,17 @@ ATTRIBUTES_SQL = """CREATE TABLE attributes (
 );"""
 
 
-feature_type_map = {
-    "exon": 1,
-    "cds": 2,
-    "utr": 3,
-    "start_codon": 4,
-    "stop_codon": 5,
-    "five_prime_utr": 6,
-    "three_prime_utr": 7,
-}
-
 # get year month day
 version = "20261112"
+
+with open("files.json", "r") as f:
+    files = json.load(f)
 
 for file_desc in files:
     print(file_desc)
 
     db = f"../data/modules/genome/gtf_{file_desc['version']}.v{version}.db"
+
     if os.path.exists(db):
         os.remove(db)
 
@@ -315,11 +306,23 @@ for file_desc in files:
     # exon_map = {}
     id_map = {}
 
+    feature_type_map = {
+        "exon": 1,
+        "cds": 2,
+        "utr": 3,
+        "start_codon": 4,
+        "stop_codon": 5,
+        "five_prime_utr": 6,
+        "three_prime_utr": 7,
+    }
+
     with gzip.open(
         file_desc["file"],
         "rt",
     ) as f:
         for line in f:
+            line = line.strip()
+
             if line.startswith("#"):
                 continue
 
@@ -491,6 +494,9 @@ for file_desc in files:
                 if transcript_id not in id_map:
                     id_map[transcript_id] = record
 
+                if transcript_id == "ENST00000331835":
+                    print("Found transcript:", transcript_id, id_map[transcript_id])
+
                 cursor.execute(
                     "INSERT INTO transcripts (id, gene_id, transcript_id, start, end, is_canonical, biotype_id) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
                     (
@@ -530,23 +536,18 @@ for file_desc in files:
                         ),
                     )
 
-                try:
-                    cursor.execute(
-                        "INSERT INTO features (id, transcript_id, feature_type_id, exon_id, exon_number, start, end) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
-                        (
-                            record,
-                            id_map[transcript_id],
-                            feature_type_map[level],
-                            exon_id,
-                            exon_number,
-                            start,
-                            end,
-                        ),
-                    )
-                except Exception as e:
-                    print("Error inserting feature:", e)
-                    print(line)
-                    print(feature_type_map[level], transcript_id, id_map[transcript_id])
+                cursor.execute(
+                    "INSERT INTO features (id, transcript_id, feature_type_id, exon_id, exon_number, start, end) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+                    (
+                        record,
+                        id_map[transcript_id],
+                        feature_type_map[level],
+                        exon_id,
+                        exon_number,
+                        start,
+                        end,
+                    ),
+                )
 
             # cursor.execute(
             #     "INSERT INTO attributes (id, attributes) VALUES (?, ?)",

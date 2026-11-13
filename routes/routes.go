@@ -29,11 +29,12 @@ type (
 		// only show canonical genes
 		Canonical bool
 		Promoter  *dna.PromoterRegion
+		Format    string
 	}
 
 	GenesResp struct {
-		Location *dna.Location            `json:"location"`
-		Features []*genome.GenomicFeature `json:"features"`
+		Location *dna.Location            `json:"location" msgpack:"location"`
+		Features []*genome.GenomicFeature `json:"features" msgpack:"features"`
 	}
 
 	AnnotationResponse struct {
@@ -124,6 +125,19 @@ func parseQuery(c *gin.Context, param string) (*GeneQuery, error) {
 
 	feature := ParseFeature(c)
 
+	// print full url
+	log.Debug().Msgf("Full URL: %s", c.Request.URL.String())
+	log.Debug().Msgf("Feature: %s", feature)
+
+	format := c.Query("format")
+
+	// force it to be either "json" or "msgpack"
+	if format != "msgpack" {
+		format = "json"
+	}
+
+	log.Debug().Msgf("Format: %s", format)
+
 	// switch c.Query("feature") {
 	// case "exon":
 	// 	feature = genome.ExonLevel
@@ -152,7 +166,9 @@ func parseQuery(c *gin.Context, param string) (*GeneQuery, error) {
 			Database:  db,
 			Feature:   feature,
 			Canonical: canonical,
-			Promoter:  promoterRegion},
+			Promoter:  promoterRegion,
+			Format:    format,
+		},
 		nil
 }
 
@@ -202,10 +218,18 @@ func OverlappingGenesRoute(c *gin.Context) {
 		}
 
 		ret = append(ret, &GenesResp{Location: location, Features: features})
-
 	}
 
-	web.MakeDataResp(c, "", &ret)
+	log.Debug().Msgf("Format: %s", query.Format)
+
+	if query.Format == "msgpack" {
+		web.MakeMsgpackResp(c, "", &ret)
+	} else {
+		// usually default to JSON response
+		web.MakeDataResp(c, "", &ret)
+	}
+
+	// web.MakeDataResp(c, "", &ret)
 }
 
 // Search for genes, but slightly slower lookup since assembly must
@@ -502,7 +526,7 @@ func MakeGeneTable(
 
 		for _, closestGene := range annotation.ClosestGenes {
 			row = append(row, closestGene.GeneId)
-			row = append(row, genome.GeneWithStrandLabel(closestGene.Symbol, closestGene.Location.Strand()))
+			row = append(row, genome.GeneWithStrandLabel(closestGene.Symbol, closestGene.Strand))
 			row = append(row, closestGene.Label)
 			row = append(row, strconv.Itoa(closestGene.TssDist))
 			//row = append(row, closestGene.Location.String())

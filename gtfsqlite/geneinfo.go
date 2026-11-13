@@ -239,14 +239,15 @@ func genesToGeneInfoRecords(rows *sql.Rows) ([]*genome.GenomicFeature, error) {
 		}
 
 		currentGene := &genome.GenomicFeature{Id: gid,
-			Location: location,
-			Type:     genome.GeneLevel,
-			Symbol:   geneSymbol,
-			GeneId:   geneId,
+			//Location: location,
+			Type:   genome.FeatureTypeGene,
+			Symbol: geneSymbol,
+			GeneId: geneId,
 			//Strand:   strand,
 			Biotype: geneType,
 			//Children: make([]*GenomicFeature, 0, 10)
 		}
+		genome.AddLocationToFeature(currentGene, location)
 
 		ret = append(ret, currentGene)
 
@@ -320,14 +321,16 @@ func transcriptsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*genome
 			}
 
 			currentGene = &genome.GenomicFeature{Id: gid,
-				Location: location,
-				Type:     genome.GeneLevel,
-				Symbol:   geneSymbol,
-				GeneId:   geneId,
+				//Location: location,
+				Type:   genome.FeatureTypeGene,
+				Symbol: geneSymbol,
+				GeneId: geneId,
 				//Strand:   strand,
 				Biotype: biotype,
 				//Children: make([]*GenomicFeature, 0, 10)
 			}
+
+			genome.AddLocationToFeature(currentGene, location)
 
 			ret = append(ret, currentGene)
 		}
@@ -343,7 +346,7 @@ func transcriptsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*genome
 		//if canonical mode only add if transcript is canonical
 		// also only add if we have a current gene
 		// also only add if we don't already have this transcript
-		if (currentTranscript == nil || currentTranscript.Transcript != transcriptId) &&
+		if (currentTranscript == nil || currentTranscript.TranscriptId != transcriptId) &&
 			(!canonicalMode || isCanonical) {
 
 			location, err := dna.NewStrandedLocation(chr, transcriptStart, transcriptEnd, strand)
@@ -354,17 +357,19 @@ func transcriptsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*genome
 
 			// set the properties that will not change for a transcript
 			currentTranscript = &genome.GenomicFeature{Id: gid,
-				Location: location,
+				//Location: location,
 				//Strand:       strand,
-				Type:        genome.TranscriptLevel,
-				Symbol:      geneSymbol,
-				GeneId:      geneId,
-				Transcript:  transcriptId,
-				IsCanonical: isCanonical,
+				Type:         genome.FeatureTypeTranscript,
+				Symbol:       geneSymbol,
+				GeneId:       geneId,
+				TranscriptId: transcriptId,
+				IsCanonical:  isCanonical,
 				//IsLongest:   isLongest,
 				//Biotype:      transcriptType,
 				//Children: make([]*GenomicFeature, 0, 10)
 			}
+
+			genome.AddLocationToFeature(currentTranscript, location)
 
 			if currentGene != nil {
 				if currentGene.Children == nil {
@@ -456,16 +461,17 @@ func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*genome.Genom
 			}
 
 			currentGene = &genome.GenomicFeature{Id: gid,
-				Location: location,
-				Type:     genome.GeneLevel,
-				Symbol:   geneSymbol,
-				GeneId:   geneId,
+				//Location: location,
+				Type:   genome.FeatureTypeGene,
+				Symbol: geneSymbol,
+				GeneId: geneId,
 				//Strand:   strand,
 				Biotype: biotype,
 				//Children: make([]*GenomicFeature, 0, 10)
 			}
-
+			genome.AddLocationToFeature(currentGene, location)
 			ret = append(ret, currentGene)
+
 		}
 
 		// gene inherits properties from transcripts and these become true
@@ -479,7 +485,7 @@ func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*genome.Genom
 		//if canonical mode only add if transcript is canonical
 		// also only add if we have a current gene
 		// also only add if we don't already have this transcript
-		if (currentTranscript == nil || currentTranscript.Transcript != transcriptId) &&
+		if (currentTranscript == nil || currentTranscript.TranscriptId != transcriptId) &&
 			(!canonicalMode || isCanonical) {
 
 			location, err := dna.NewStrandedLocation(chr, transcriptStart, transcriptEnd, strand)
@@ -490,17 +496,18 @@ func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*genome.Genom
 
 			// set the properties that will not change for a transcript
 			currentTranscript = &genome.GenomicFeature{Id: gid,
-				Location: location,
+				//Location: location,
 				//Strand:       strand,
-				Type:        genome.TranscriptLevel,
-				Symbol:      geneSymbol,
-				GeneId:      geneId,
-				Transcript:  transcriptId,
-				IsCanonical: isCanonical,
+				Type:         genome.TranscriptLevel,
+				Symbol:       geneSymbol,
+				GeneId:       geneId,
+				TranscriptId: transcriptId,
+				IsCanonical:  isCanonical,
 				//IsLongest:   isLongest,
 				//Biotype:      transcriptType,
 				//Children: make([]*GenomicFeature, 0, 10)
 			}
+			genome.AddLocationToFeature(currentTranscript, location)
 
 			if currentGene != nil {
 				if currentGene.Children == nil {
@@ -523,14 +530,15 @@ func exonsToGeneInfoRecords(rows *sql.Rows, canonicalMode bool) ([]*genome.Genom
 		}
 
 		currentExon = &genome.GenomicFeature{Id: gid,
-			Location:   location,
-			Type:       genome.ExonLevel,
-			Symbol:     geneSymbol,
-			GeneId:     geneId,
-			Transcript: transcriptId,
-			Exon:       exonId,
-			ExonNumber: exonNumber,
+			//Location:     location,
+			Type:         genome.FeatureTypeExon,
+			Symbol:       geneSymbol,
+			GeneId:       geneId,
+			TranscriptId: transcriptId,
+			ExonId:       exonId,
+			ExonNumber:   exonNumber,
 		}
+		genome.AddLocationToFeature(currentExon, location)
 
 		if currentTranscript != nil {
 			if currentTranscript.Children == nil {

@@ -8,37 +8,36 @@ import (
 
 type (
 	GenomicFeatures struct {
-		Type     string            `json:"type"`
-		Features []*GenomicFeature `json:"features"`
+		Type     string            `json:"type" msgpack:"type"`
+		Features []*GenomicFeature `json:"features" msgpack:"features"`
 	}
 
 	GenomicFeature struct {
-		Location     *dna.Location     `json:"loc"`
-		PublicId     string            `json:"id,omitempty"`
-		Label        string            `json:"label,omitempty"`
-		Biotype      string            `json:"biotype,omitempty"`
-		GeneId       string            `json:"geneId,omitempty"`
-		Symbol       string            `json:"symbol,omitempty"`
-		Transcript   string            `json:"transcript,omitempty"`
-		Exon         string            `json:"exon,omitempty"`
-		Strand       string            `json:"strand,omitempty"`
-		Type         string            `json:"type,omitempty"`
-		Children     []*GenomicFeature `json:"children,omitempty"`
-		TssDist      int               `json:"tssDist,omitempty"`
-		Value        float64           `json:"value,omitempty"`
-		Id           int               `json:"-"`
-		ExonNumber   int               `json:"exonNumber,omitempty"`
-		InPromoter   bool              `json:"inPromoter,omitempty"`
-		InExon       bool              `json:"inExon,omitempty"`
-		IsIntragenic bool              `json:"isIntragenic,omitempty"`
-		//IsLongest    bool              `json:"isLongest,omitempty"`
-		IsCanonical bool `json:"isCanonical,omitempty"`
+		Type         string              `json:"type,omitempty" msgpack:"type,omitempty"`
+		Biotype      string              `json:"biotype,omitempty" msgpack:"biotype,omitempty"`
+		Symbol       string              `json:"symbol,omitempty" msgpack:"symbol,omitempty"`
+		TranscriptId string              `json:"transcriptId,omitempty" msgpack:"transcriptId,omitempty"`
+		ExonId       string              `json:"exonId,omitempty" msgpack:"exonId,omitempty"`
+		Strand       string              `json:"strand,omitempty" msgpack:"strand,omitempty"`
+		Label        string              `json:"label,omitempty" msgpack:"label,omitempty"`
+		PublicId     string              `json:"id,omitempty" msgpack:"id,omitempty"`
+		GeneId       string              `json:"geneId,omitempty" msgpack:"geneId,omitempty"`
+		Children     []*GenomicFeature   `json:"children,omitempty" msgpack:"children,omitempty"`
+		dna.Loc      `msgpack:",inline"` // need to explicity tell it to inline props
+		TssDist      int                 `json:"tssDist,omitempty" msgpack:"tssDist,omitempty"`
+		Id           int                 `json:"-" msgpack:"-"`
+		ExonNumber   int                 `json:"exonNumber,omitempty" msgpack:"exonNumber,omitempty"`
+		Value        float64             `json:"value,omitempty" msgpack:"value,omitempty"`
+		InPromoter   bool                `json:"inPromoter,omitempty" msgpack:"inPromoter,omitempty"`
+		InExon       bool                `json:"inExon,omitempty" msgpack:"inExon,omitempty"`
+		IsIntragenic bool                `json:"isIntragenic,omitempty" msgpack:"isIntragenic,omitempty"`
+		IsCanonical  bool                `json:"isCanonical,omitempty" msgpack:"isCanonical,omitempty"`
 	}
 
 	GenomicSearchResults struct {
-		Location *dna.Location     `json:"location"`
-		Type     string            `json:"type"`
-		Features []*GenomicFeature `json:"features"`
+		Location *dna.Location     `json:"location" msgpack:"location"`
+		Type     string            `json:"type" msgpack:"type"`
+		Features []*GenomicFeature `json:"features" msgpack:"features"`
 	}
 
 	GtfDB interface {
@@ -84,6 +83,12 @@ const (
 	GeneAndTranscriptLevels string = "gene,transcript"
 	GeneAndExonLevels       string = "gene,exon"
 	TranscriptAndExonLevels string = "transcript,exon"
+
+	FeatureTypeGene       string = "gene"
+	FeatureTypeTranscript string = "transcript"
+	FeatureTypeExon       string = "exon"
+	FeatureTypeCds        string = "cds"
+	FeatureTypeUtr        string = "utr"
 )
 
 var (
@@ -119,4 +124,15 @@ func MaxLevel(levels string) string {
 	}
 
 	return level
+}
+
+func AddLocationToFeature(feature *GenomicFeature, location *dna.Location) {
+
+	if feature.Type == FeatureTypeGene {
+		feature.Chr = location.Chr()
+		feature.Strand = location.Strand()
+	}
+
+	feature.Start = location.Start()
+	feature.End = location.End()
 }

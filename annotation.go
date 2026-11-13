@@ -133,28 +133,28 @@ func (annotateDb *GtfAnnotateDb) ClassifyFeature(location *dna.Location, feature
 	mid := location.Mid()
 	var start int
 
-	if feature.Location.Strand() == "+" {
-		start = feature.Location.Start() - annotateDb.TSSRegion.FivePrime()
+	if feature.Strand == "+" {
+		start = feature.Start - annotateDb.TSSRegion.FivePrime()
 	} else {
-		start = feature.Location.Start()
+		start = feature.Start
 	}
 
 	var end int
 
-	if feature.Location.Strand() == "-" {
-		end = feature.Location.End() + annotateDb.TSSRegion.FivePrime()
+	if feature.Strand == "-" {
+		end = feature.End + annotateDb.TSSRegion.FivePrime()
 	} else {
-		end = feature.Location.End()
+		end = feature.End
 	}
 
 	// if location.Start > end || location.End < start {
 	// 	return INTERGENIC
 	// }
 
-	isPromoter := (feature.Location.Strand() == "+" && mid >= start && mid <= feature.Location.Start()+annotateDb.TSSRegion.ThreePrime()) ||
-		(feature.Location.Strand() == "-" && mid >= feature.Location.End()-annotateDb.TSSRegion.ThreePrime() && mid <= end)
+	isPromoter := (feature.Strand == "+" && mid >= start && mid <= feature.Start+annotateDb.TSSRegion.ThreePrime()) ||
+		(feature.Strand == "-" && mid >= feature.End-annotateDb.TSSRegion.ThreePrime() && mid <= end)
 
-	isExon, err := annotateDb.DB.InExon(location, feature.Transcript, annotateDb.TSSRegion)
+	isExon, err := annotateDb.DB.InExon(location, feature.TranscriptId, annotateDb.TSSRegion)
 
 	if err != nil {
 		return "", err
@@ -162,7 +162,7 @@ func (annotateDb *GtfAnnotateDb) ClassifyFeature(location *dna.Location, feature
 
 	// isExon := len(exons) > 0
 
-	isIntronic := mid >= feature.Location.Start() && mid <= feature.Location.End()
+	isIntronic := mid >= feature.Start && mid <= feature.End
 
 	return MakePromLabel(isPromoter, isExon, isIntronic), nil
 }

@@ -2,10 +2,10 @@ package gtftabix
 
 import (
 	"path/filepath"
-	"strings"
 
 	"github.com/antonybholmes/go-dna"
 	"github.com/antonybholmes/go-genome"
+	"github.com/antonybholmes/go-sys"
 	"github.com/antonybholmes/go-sys/log"
 	basemath "github.com/antonybholmes/go-sys/math"
 )
@@ -30,7 +30,7 @@ func (gdb *GtfTabixDB) Close() error {
 }
 
 func (gdb *GtfTabixDB) OverlappingGenes(location *dna.Location,
-	levels string,
+	levels sys.Set[genome.FeatureType],
 	prom *dna.PromoterRegion,
 	canonicalMode bool,
 	annotationMode bool,
@@ -93,7 +93,7 @@ func (gdb *GtfTabixDB) InExon(location *dna.Location, transcriptId string, prom 
 }
 
 func (gdb *GtfTabixDB) IntragenicFeatures(location *dna.Location,
-	levels string,
+	levels sys.Set[genome.FeatureType],
 	prom *dna.PromoterRegion,
 	useOfficialGenes bool) ([]*genome.GenomicFeature, error) {
 
@@ -140,7 +140,7 @@ func (gdb *GtfTabixDB) IntragenicFeatures(location *dna.Location,
 // }
 
 func (gdb *GtfTabixDB) SearchByName(search string,
-	level string,
+	levels sys.Set[genome.FeatureType],
 	canonicalMode bool,
 	n int16) ([]*genome.GenomicFeature, error) {
 	return nil, nil
@@ -150,7 +150,7 @@ func (gdb *GtfTabixDB) SearchByName(search string,
 func toGenomicFeature(location *dna.Location,
 	prom *dna.PromoterRegion,
 	feats []*Feature,
-	levels string,
+	levels sys.Set[genome.FeatureType],
 	canonicalMode bool,
 	annotationMode bool) ([]*genome.GenomicFeature, error) {
 	var currentGene *genome.GenomicFeature
@@ -180,7 +180,7 @@ func toGenomicFeature(location *dna.Location,
 		// only add a new gene if we don't already have it. We
 		// assume the rows are ordered by gene id hence if the
 		// id changes, we are processing a set of rows for a new gene
-		if strings.Contains(levels, "gene") && (currentGene == nil || currentGene.GeneId != geneId) {
+		if levels.Has(genome.FeatureTypeGene) && (currentGene == nil || currentGene.GeneId != geneId) {
 			location, err := dna.NewStrandedLocation(chr, start, end, strand)
 
 			if err != nil {
@@ -189,7 +189,7 @@ func toGenomicFeature(location *dna.Location,
 
 			currentGene = &genome.GenomicFeature{Id: gid,
 				//Location: location,
-				Type:    feat.Type,
+				Type:    genome.FeatureType(feat.Type),
 				Symbol:  geneSymbol,
 				GeneId:  geneId,
 				Strand:  strand,
@@ -210,7 +210,7 @@ func toGenomicFeature(location *dna.Location,
 		//if canonical mode only add if transcript is canonical
 		// also only add if we have a current gene
 		// also only add if we don't already have this transcript
-		if strings.Contains(levels, "transcript") &&
+		if levels.Has(genome.FeatureTypeTranscript) &&
 			(currentTranscript == nil || currentTranscript.TranscriptId != transcriptId) {
 
 			isCanonical := feat.IsCanonical()
@@ -247,7 +247,7 @@ func toGenomicFeature(location *dna.Location,
 			currentTranscript = &genome.GenomicFeature{Id: gid,
 				//Location: location,
 				//Strand:       strand,
-				Type:         genome.TranscriptLevel,
+				Type:         genome.FeatureTypeTranscript,
 				Symbol:       geneSymbol,
 				GeneId:       geneId,
 				TranscriptId: transcriptId,
@@ -300,7 +300,7 @@ func toGenomicFeature(location *dna.Location,
 		// If we don't have a gene, we just add it to the return list.
 		// This is because some databases may not have transcripts and we still want to
 		// capture exon information if it is available.
-		if strings.Contains(levels, featureType) {
+		if levels.Has(genome.FeatureType(featureType)) {
 			location, err := dna.NewStrandedLocation(chr, start, end, strand)
 
 			if err != nil {
@@ -311,7 +311,7 @@ func toGenomicFeature(location *dna.Location,
 
 			currentFeature = &genome.GenomicFeature{Id: gid,
 				//Location:     location,
-				Type:         featureType,
+				Type:         genome.FeatureType(featureType),
 				Symbol:       geneSymbol,
 				GeneId:       geneId,
 				TranscriptId: transcriptId,
@@ -363,26 +363,26 @@ func toGenomicFeature(location *dna.Location,
 	return ret, nil
 }
 
-func rowsToSearchResults(location *dna.Location,
-	prom *dna.PromoterRegion,
-	feats []*Feature,
-	levels string,
-	canonicalMode bool,
-	annotationMode bool) (*genome.GenomicSearchResults, error) {
+// func rowsToSearchResults(location *dna.Location,
+// 	prom *dna.PromoterRegion,
+// 	feats []*Feature,
+// 	levels string,
+// 	canonicalMode bool,
+// 	annotationMode bool) (*genome.GenomicSearchResults, error) {
 
-	// 10 seems a reasonable guess for the number of features we might see, just
-	// to reduce slice reallocation
-	features, err := toGenomicFeature(location,
-		prom,
-		feats,
-		levels,
-		canonicalMode,
-		annotationMode)
+// 	// 10 seems a reasonable guess for the number of features we might see, just
+// 	// to reduce slice reallocation
+// 	features, err := toGenomicFeature(location,
+// 		prom,
+// 		feats,
+// 		levels,
+// 		canonicalMode,
+// 		annotationMode)
 
-	if err != nil {
-		log.Error().Msgf("error converting rows to features %s", err)
-		return nil, err
-	}
+// 	if err != nil {
+// 		log.Error().Msgf("error converting rows to features %s", err)
+// 		return nil, err
+// 	}
 
-	return genome.FeaturesToSearchResults(location, levels, features, annotationMode)
-}
+// 	return genome.FeaturesToSearchResults(location, levels, features, annotationMode)
+// }

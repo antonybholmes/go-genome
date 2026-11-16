@@ -321,7 +321,7 @@ func (gdb *GtfSqliteDB) Close() error {
 }
 
 func (gdb *GtfSqliteDB) OverlappingGenes(location *dna.Location,
-	levels string,
+	levels sys.Set[genome.FeatureType],
 	prom *dna.PromoterRegion,
 	canonicalMode bool,
 	annotationMode bool,
@@ -392,7 +392,7 @@ func (gdb *GtfSqliteDB) OverlappingGenes(location *dna.Location,
 // }
 
 func (gdb *GtfSqliteDB) IntragenicFeatures(location *dna.Location,
-	levels string,
+	levels sys.Set[genome.FeatureType],
 	prom *dna.PromoterRegion,
 	useOfficialGenes bool) ([]*genome.GenomicFeature, error) {
 
@@ -463,11 +463,14 @@ func (gdb *GtfSqliteDB) ClosestGenes(location *dna.Location,
 
 	defer rows.Close()
 
-	return rowsToFeatures(rows, genome.GeneLevel, false, true)
+	return rowsToFeatures(rows, genome.FeatureLevelsGene, false, true)
 
 }
 
-func rowsToFeatures(rows *sql.Rows, levels string, canonicalMode bool, annotationMode bool) ([]*genome.GenomicFeature, error) {
+func rowsToFeatures(rows *sql.Rows,
+	levels sys.Set[genome.FeatureType],
+	canonicalMode bool,
+	annotationMode bool) ([]*genome.GenomicFeature, error) {
 	var gid int
 	var chr string
 	var geneStart int
@@ -486,7 +489,7 @@ func rowsToFeatures(rows *sql.Rows, levels string, canonicalMode bool, annotatio
 	var isLongest bool
 
 	var exonId string
-	var featureType string
+	var featureType genome.FeatureType
 	var featureStart int
 	var featureEnd int
 	var exonNumber int
@@ -569,7 +572,7 @@ func rowsToFeatures(rows *sql.Rows, levels string, canonicalMode bool, annotatio
 		// only add a new gene if we don't already have it. We
 		// assume the rows are ordered by gene id hence if the
 		// id changes, we are processing a set of rows for a new gene
-		if strings.Contains(levels, "gene") && (currentGene == nil || currentGene.GeneId != geneId) {
+		if levels.Has("gene") && (currentGene == nil || currentGene.GeneId != geneId) {
 			location, err := dna.NewStrandedLocation(chr, geneStart, geneEnd, strand)
 
 			if err != nil {
@@ -609,7 +612,7 @@ func rowsToFeatures(rows *sql.Rows, levels string, canonicalMode bool, annotatio
 		//if canonical mode only add if transcript is canonical
 		// also only add if we have a current gene
 		// also only add if we don't already have this transcript
-		if strings.Contains(levels, "transcript") &&
+		if levels.Has("transcript") &&
 			(currentTranscript == nil || currentTranscript.TranscriptId != transcriptId) &&
 			(!canonicalMode || isCanonical) {
 
@@ -673,7 +676,7 @@ func rowsToFeatures(rows *sql.Rows, levels string, canonicalMode bool, annotatio
 		// If we don't have a gene, we just add it to the return list.
 		// This is because some databases may not have transcripts and we still want to
 		// capture exon information if it is available.
-		if strings.Contains(levels, featureType) {
+		if levels.Has(featureType) {
 			location, err := dna.NewStrandedLocation(chr, featureStart, featureEnd, strand)
 
 			if err != nil {

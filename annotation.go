@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/antonybholmes/go-dna"
+	"github.com/antonybholmes/go-sys"
 
 	"github.com/antonybholmes/go-sys/log"
 )
@@ -77,7 +78,7 @@ func NewGtfAnnotateDb(genesdb GtfDB, tssRegion *dna.PromoterRegion, closestN int
 	}
 }
 
-func (annotateDb *GtfAnnotateDb) Annotate(location *dna.Location, levels string) (*GeneAnnotation, error) {
+func (annotateDb *GtfAnnotateDb) Annotate(location *dna.Location, levels sys.Set[FeatureType]) (*GeneAnnotation, error) {
 	//mid := location.Mid()
 
 	// extend search area to account  for promoter
@@ -89,11 +90,9 @@ func (annotateDb *GtfAnnotateDb) Annotate(location *dna.Location, levels string)
 
 	//log.Debug().Msgf("Annotating location %s %s", location, annotateDb.GeneDb.File)
 
-	level := GeneLevel
-
 	genesWithin, err := annotateDb.DB.IntragenicFeatures(
 		location,
-		level,
+		FeatureLevelsGene,
 		annotateDb.TSSRegion,
 		annotateDb.UseOfficialGenes,
 	)

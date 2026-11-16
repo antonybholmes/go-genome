@@ -13,6 +13,7 @@ import (
 	dnaroutes "github.com/antonybholmes/go-dna/routes"
 	"github.com/antonybholmes/go-genome"
 	"github.com/antonybholmes/go-genome/genomedb"
+	"github.com/antonybholmes/go-sys"
 	"github.com/antonybholmes/go-sys/log"
 	"github.com/antonybholmes/go-web"
 	"github.com/gin-gonic/gin"
@@ -23,9 +24,9 @@ type (
 	GeneQuery struct {
 		Id string
 		//Assembly string
-		Feature  string
-		Database genome.GtfDB
-		Biotype  string // e.g. "protein_coding", "non_coding", etc.
+		FeatureTypes sys.Set[genome.FeatureType]
+		Database     genome.GtfDB
+		Biotype      string // e.g. "protein_coding", "non_coding", etc.
 		// only show canonical genes
 		Canonical bool
 		Promoter  *dna.PromoterRegion
@@ -68,36 +69,28 @@ var (
 	// }
 )
 
-func ParseFeature(c *gin.Context) string {
+func ParseFeatureTypes(c *gin.Context) sys.Set[genome.FeatureType] {
 
-	feature := web.FormatParam(c.Query("feature")) //ParseFeature(c)
+	feature := strings.ToLower(c.Query("feature"))
 
-	if feature == "" {
-		feature = genome.AllLevels
+	switch {
+	case strings.Contains(feature, "gene,transcript,exon"):
+		return genome.FeatureLevelsAll
+	case strings.Contains(feature, "gene,transcript"):
+		return genome.FeatureLevelsGeneAndTranscript
+	case strings.Contains(feature, "gene,exon"):
+		return genome.FeatureLevelsGeneAndExon
+	case strings.Contains(feature, "transcript,exon"):
+		return genome.FeatureLevelsTranscriptAndExon
+	case strings.Contains(feature, "gene"):
+		return genome.FeatureLevelsGene
+	case strings.Contains(feature, "transcript"):
+		return genome.FeatureLevelsTranscript
+	case strings.Contains(feature, "exon"):
+		return genome.FeatureLevelsExon
+	default:
+		return genome.FeatureLevelsAll
 	}
-
-	return feature
-
-	// feature := strings.ToLower(c.Query("feature"))
-
-	// switch {
-	// case strings.Contains(feature, "gene,transcript,exon"):
-	// 	return genome.AllLevels
-	// case strings.Contains(feature, "gene,transcript"):
-	// 	return genome.GeneAndTranscriptLevels
-	// case strings.Contains(feature, "gene,exon"):
-	// 	return genome.GeneAndExonLevels
-	// case strings.Contains(feature, "transcript,exon"):
-	// 	return genome.TranscriptAndExonLevels
-	// case strings.Contains(feature, "gene"):
-	// 	return genome.GeneLevel
-	// case strings.Contains(feature, "transcript"):
-	// 	return genome.TranscriptLevel
-	// case strings.Contains(feature, "exon"):
-	// 	return genome.ExonLevel
-	// default:
-	// 	return genome.AllLevels
-	// }
 
 }
 
@@ -123,11 +116,11 @@ func parseQuery(c *gin.Context, param string) (*GeneQuery, error) {
 
 	//dbFile := genomeToFileMap[assembly]
 
-	feature := ParseFeature(c)
+	featureTypes := ParseFeatureTypes(c)
 
 	// print full url
 	log.Debug().Msgf("Full URL: %s", c.Request.URL.String())
-	log.Debug().Msgf("Feature: %s", feature)
+	log.Debug().Msgf("Feature: %s", featureTypes)
 
 	format := c.Query("format")
 
@@ -162,12 +155,12 @@ func parseQuery(c *gin.Context, param string) (*GeneQuery, error) {
 	return &GeneQuery{
 			Id: id,
 			//Assembly:  id,
-			Biotype:   biotype,
-			Database:  db,
-			Feature:   feature,
-			Canonical: canonical,
-			Promoter:  promoterRegion,
-			Format:    format,
+			Biotype:      biotype,
+			Database:     db,
+			FeatureTypes: featureTypes,
+			Canonical:    canonical,
+			Promoter:     promoterRegion,
+			Format:       format,
 		},
 		nil
 }
@@ -206,7 +199,7 @@ func OverlappingGenesRoute(c *gin.Context) {
 
 	for _, location := range locations {
 		features, err := query.Database.OverlappingGenes(location,
-			query.Feature,
+			query.FeatureTypes,
 			query.Promoter,
 			query.Canonical,
 			false,
@@ -256,7 +249,7 @@ func SearchForGenesByAssemblyRoute(c *gin.Context) {
 	canonical := strings.HasPrefix(strings.ToLower(c.Query("canonical")), "t")
 
 	features, _ := query.Database.SearchByName(search,
-		query.Feature,
+		query.FeatureTypes,
 		canonical,
 		int16(n))
 
@@ -269,7 +262,7 @@ func SearchForGenesByAssemblyRoute(c *gin.Context) {
 
 // Search for genes using a specific gtf database. Preferable
 // as slightly faster lookup.
-func SearchForGenesRoute(c *gin.Context) {
+func GeneSearchRoute(c *gin.Context) {
 
 	search := c.Query("q")
 
@@ -290,7 +283,7 @@ func SearchForGenesRoute(c *gin.Context) {
 	canonical := strings.HasPrefix(strings.ToLower(c.Query("canonical")), "t")
 
 	features, _ := query.Database.SearchByName(search,
-		query.Feature,
+		query.FeatureTypes,
 		canonical,
 		int16(n))
 
@@ -365,7 +358,7 @@ func ClosestGeneRoute(c *gin.Context) {
 			return
 		}
 
-		data[li] = &genome.GenomicSearchResults{Location: location, Type: genome.GeneLevel, Features: genes}
+		data[li] = &genome.GenomicSearchResults{Location: location, Type: genome.FeatureTypeGene, Features: genes}
 	}
 
 	web.MakeDataResp(c, "", &data)
@@ -437,7 +430,7 @@ func AnnotateRoute(c *gin.Context) {
 	data := make([]*genome.GeneAnnotation, len(locations))
 
 	for li, location := range locations {
-		annotations, err := annotationDb.Annotate(location, query.Feature)
+		annotations, err := annotationDb.Annotate(location, query.FeatureTypes)
 
 		if err != nil {
 			log.Error().Msgf("Error annotating location %s: %v", location, err)

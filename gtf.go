@@ -1,19 +1,20 @@
 package genome
 
 import (
-	"strings"
-
 	"github.com/antonybholmes/go-dna"
+	"github.com/antonybholmes/go-sys"
 )
 
 type (
+	FeatureType string
+
 	GenomicFeatures struct {
-		Type     string            `json:"type" msgpack:"type"`
+		Type     FeatureType       `json:"type" msgpack:"type"`
 		Features []*GenomicFeature `json:"features" msgpack:"features"`
 	}
 
 	GenomicFeature struct {
-		Type         string              `json:"type,omitempty" msgpack:"type,omitempty"`
+		Type         FeatureType         `json:"type,omitempty" msgpack:"type,omitempty"`
 		Biotype      string              `json:"biotype,omitempty" msgpack:"biotype,omitempty"`
 		Symbol       string              `json:"symbol,omitempty" msgpack:"symbol,omitempty"`
 		TranscriptId string              `json:"transcriptId,omitempty" msgpack:"transcriptId,omitempty"`
@@ -36,7 +37,7 @@ type (
 
 	GenomicSearchResults struct {
 		Location *dna.Location     `json:"location" msgpack:"location"`
-		Type     string            `json:"type" msgpack:"type"`
+		Type     FeatureType       `json:"type" msgpack:"type"`
 		Features []*GenomicFeature `json:"features" msgpack:"features"`
 	}
 
@@ -46,7 +47,7 @@ type (
 			prom *dna.PromoterRegion) (bool, error)
 
 		IntragenicFeatures(location *dna.Location,
-			levels string,
+			levels sys.Set[FeatureType],
 			prom *dna.PromoterRegion,
 			useOfficialGenes bool) ([]*GenomicFeature, error)
 
@@ -56,14 +57,15 @@ type (
 			useOfficialGenes bool) ([]*GenomicFeature, error)
 
 		OverlappingGenes(location *dna.Location,
-			levels string,
+			levels sys.Set[FeatureType],
 			prom *dna.PromoterRegion,
 			canonicalMode bool,
 			annotationMode bool,
 			biotypeFilter string) ([]*GenomicFeature, error)
 
+		// SearchByName searches for genomic features by name
 		SearchByName(search string,
-			level string,
+			levels sys.Set[FeatureType],
 			canonicalMode bool,
 			n int16) ([]*GenomicFeature, error)
 
@@ -76,19 +78,19 @@ type (
 )
 
 const (
-	AllLevels               string = "gene,transcript,exon,cds,utr"
-	GeneLevel               string = "gene"
-	TranscriptLevel         string = "transcript"
-	ExonLevel               string = "exon"
-	GeneAndTranscriptLevels string = "gene,transcript"
-	GeneAndExonLevels       string = "gene,exon"
-	TranscriptAndExonLevels string = "transcript,exon"
+	// AllLevels               string = "gene,transcript,exon,cds,utr"
+	// GeneLevel               string = "gene"
+	// TranscriptLevel         string = "transcript"
+	// ExonLevel               string = "exon"
+	// GeneAndTranscriptLevels string = "gene,transcript"
+	// GeneAndExonLevels       string = "gene,exon"
+	// TranscriptAndExonLevels string = "transcript,exon"
 
-	FeatureTypeGene       string = "gene"
-	FeatureTypeTranscript string = "transcript"
-	FeatureTypeExon       string = "exon"
-	FeatureTypeCds        string = "cds"
-	FeatureTypeUtr        string = "utr"
+	FeatureTypeGene       FeatureType = "gene"
+	FeatureTypeTranscript FeatureType = "transcript"
+	FeatureTypeExon       FeatureType = "exon"
+	FeatureTypeCds        FeatureType = "cds"
+	FeatureTypeUtr        FeatureType = "utr"
 )
 
 var (
@@ -97,10 +99,18 @@ var (
 		"cds":  "cds",
 		"utr":  "utrs",
 	}
+
+	FeatureLevelsAll               = sys.NewSet[FeatureType](FeatureTypeGene, FeatureTypeTranscript, FeatureTypeExon, FeatureTypeCds, FeatureTypeUtr)
+	FeatureLevelsGene              = sys.NewSet[FeatureType](FeatureTypeGene)
+	FeatureLevelsTranscript        = sys.NewSet[FeatureType](FeatureTypeTranscript)
+	FeatureLevelsExon              = sys.NewSet[FeatureType](FeatureTypeExon)
+	FeatureLevelsGeneAndTranscript = sys.NewSet[FeatureType](FeatureTypeGene, FeatureTypeTranscript)
+	FeatureLevelsGeneAndExon       = sys.NewSet[FeatureType](FeatureTypeGene, FeatureTypeExon)
+	FeatureLevelsTranscriptAndExon = sys.NewSet[FeatureType](FeatureTypeTranscript, FeatureTypeExon)
 )
 
 func FeaturesToSearchResults(location *dna.Location,
-	levels string,
+	levels sys.Set[FeatureType],
 	features []*GenomicFeature,
 	annotationMode bool) (*GenomicSearchResults, error) {
 
@@ -111,16 +121,16 @@ func FeaturesToSearchResults(location *dna.Location,
 	return &ret, nil
 }
 
-func MaxLevel(levels string) string {
-	var level string
+func MaxLevel(levels sys.Set[FeatureType]) FeatureType {
+	var level FeatureType
 
-	switch strings.ToLower(string(levels)) {
-	case "gene", "genes":
-		level = GeneLevel
-	case "transcript", "transcripts":
-		level = TranscriptLevel
+	switch {
+	case levels.Has(FeatureTypeGene):
+		level = FeatureTypeGene
+	case levels.Has(FeatureTypeTranscript):
+		level = FeatureTypeTranscript
 	default:
-		level = ExonLevel
+		level = FeatureTypeExon
 	}
 
 	return level

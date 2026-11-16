@@ -10,30 +10,6 @@ import (
 	"github.com/antonybholmes/go-sys"
 )
 
-type (
-	GeneInfoRecord struct {
-		Id              int
-		Chr             string
-		GeneStart       int
-		GeneEnd         int
-		Strand          string
-		GeneSymbol      string
-		GeneId          string
-		Biotype         string
-		TranscriptId    string
-		TranscriptStart int
-		TranscriptEnd   int
-		IsCanonical     bool
-		IsLongest       bool
-		FeatureType     genome.FeatureType
-		ExonId          string
-		ExonStart       int
-		ExonEnd         int
-		ExonNumber      int
-		Rank            int
-	}
-)
-
 const (
 	// GeneInfoSql = `SELECT DISTINCT
 	// 	g.id,
@@ -541,7 +517,7 @@ func rowsToGeneInfoRecords(rows *sql.Rows,
 		//err := geneRows.Scan(&id, &level, &chr, &start, &end, &strand, &geneId, &geneSymbol, &transcriptId, &exonId)
 
 		// The query result will have different columns depending on the level of detail requested.
-		if levels.Has("exon") {
+		if levels.Has(genome.FeatureTypeExon) {
 			err = rows.Scan(&record.Id,
 				&record.Chr,
 				&record.GeneStart,
@@ -556,13 +532,13 @@ func rowsToGeneInfoRecords(rows *sql.Rows,
 				&record.IsCanonical,
 				&record.IsLongest,
 				&record.FeatureType,
-				&record.ExonStart,
-				&record.ExonEnd,
+				&record.FeatureStart,
+				&record.FeatureEnd,
 				&record.ExonId,
 				&record.ExonNumber,
 				&record.Rank,
 			)
-		} else if levels.Has("transcript") {
+		} else if levels.Has(genome.FeatureTypeTranscript) {
 			err = rows.Scan(&record.Id,
 				&record.Chr,
 				&record.GeneStart,
@@ -589,7 +565,6 @@ func rowsToGeneInfoRecords(rows *sql.Rows,
 				&record.Biotype,
 				&record.Rank,
 			)
-
 		}
 
 		if err != nil {
@@ -608,8 +583,8 @@ func rowsToGeneInfoRecords(rows *sql.Rows,
 
 			currentGene = &genome.GenomicFeature{Id: record.Id,
 				Type:    genome.FeatureTypeGene,
-				Symbol:  record.GeneSymbol,
 				GeneId:  record.GeneId,
+				Symbol:  record.GeneSymbol,
 				Biotype: record.Biotype,
 			}
 
@@ -640,15 +615,22 @@ func rowsToGeneInfoRecords(rows *sql.Rows,
 
 			// set the properties that will not change for a transcript
 			currentTranscript = &genome.GenomicFeature{Id: record.Id,
-				Type:         genome.FeatureTypeTranscript,
-				Symbol:       record.GeneSymbol,
-				GeneId:       record.GeneId,
+				Type: genome.FeatureTypeTranscript,
+				//Symbol:       record.GeneSymbol,
+				//GeneId:       record.GeneId,
 				TranscriptId: record.TranscriptId,
 				IsCanonical:  record.IsCanonical,
 				//IsLongest:   isLongest,
-				Biotype: record.Biotype,
+				//Biotype: record.Biotype,
 			}
 			genome.AddLocationToFeature(currentTranscript, location)
+
+			// if we don't have gene level features, set the gene id and symbol on the transcript
+			if !levels.Has(genome.FeatureTypeGene) {
+				currentTranscript.GeneId = record.GeneId
+				currentTranscript.Symbol = record.GeneSymbol
+				currentTranscript.Biotype = record.Biotype
+			}
 
 			if currentGene != nil {
 				if currentGene.Children == nil {
@@ -665,7 +647,7 @@ func rowsToGeneInfoRecords(rows *sql.Rows,
 			// only add exon if we have a current transcript and it matches
 			// the transcript id
 
-			location, err := dna.NewStrandedLocation(record.Chr, record.ExonStart, record.ExonEnd, record.Strand)
+			location, err := dna.NewStrandedLocation(record.Chr, record.FeatureStart, record.FeatureEnd, record.Strand)
 
 			if err != nil {
 				return nil, err
@@ -680,6 +662,16 @@ func rowsToGeneInfoRecords(rows *sql.Rows,
 				ExonNumber: record.ExonNumber,
 			}
 			genome.AddLocationToFeature(currentExon, location)
+
+			if !levels.Has(genome.FeatureTypeGene) {
+				currentExon.GeneId = record.GeneId
+				currentExon.Symbol = record.GeneSymbol
+				currentExon.Biotype = record.Biotype
+			}
+
+			if !levels.Has(genome.FeatureTypeTranscript) {
+				currentExon.TranscriptId = record.TranscriptId
+			}
 
 			if currentTranscript != nil {
 				if currentTranscript.Children == nil {

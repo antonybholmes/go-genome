@@ -23,6 +23,33 @@ type (
 		annotation *genome.Annotation
 		file       string
 	}
+
+	// GeneInfoRecord represents a single row of gene information from the database query.
+	GeneInfoRecord struct {
+		Id              int
+		Chr             string
+		GeneStart       int
+		GeneEnd         int
+		Strand          string
+		GeneSymbol      string
+		GeneId          string
+		Biotype         string
+		TranscriptId    string
+		TranscriptStart int
+		TranscriptEnd   int
+		IsCanonical     bool
+		IsLongest       bool
+		FeatureType     genome.FeatureType
+		ExonId          string
+		FeatureStart    int
+		FeatureEnd      int
+		ExonNumber      int
+		Rank            int
+		TssDist         int
+		InPromoter      bool
+		InExon          bool
+		IsIntragenic    bool
+	}
 )
 
 const (
@@ -471,34 +498,6 @@ func rowsToFeatures(rows *sql.Rows,
 	levels sys.Set[genome.FeatureType],
 	canonicalMode bool,
 	annotationMode bool) ([]*genome.GenomicFeature, error) {
-	var gid int
-	var chr string
-	var geneStart int
-	var geneEnd int
-	var strand string
-	var geneSymbol string
-	var geneId string
-	var geneBiotype string
-
-	var transcriptId string
-
-	var transcriptStart int
-	var transcriptEnd int
-
-	var isCanonical bool
-	var isLongest bool
-
-	var exonId string
-	var featureType genome.FeatureType
-	var featureStart int
-	var featureEnd int
-	var exonNumber int
-
-	var tssDist int
-
-	var inPromoter bool
-	var inExon bool
-	var isIntragenic bool
 
 	// 10 seems a reasonable guess for the number of features we might see, just
 	// to reduce slice reallocation
@@ -514,53 +513,55 @@ func rowsToFeatures(rows *sql.Rows,
 
 	var err error
 
+	record := GeneInfoRecord{}
+
 	for rows.Next() {
 		//err := geneRows.Scan(&id, &level, &chr, &start, &end, &strand, &geneId, &geneSymbol, &transcriptId, &exonId)
 		if annotationMode {
-			err = rows.Scan(&gid,
-				&chr,
-				&geneStart,
-				&geneEnd,
-				&strand,
-				&geneId,
-				&geneSymbol,
-				&geneBiotype,
-				&transcriptId,
-				&transcriptStart,
-				&transcriptEnd,
-				&isCanonical,
-				&isLongest,
-				&featureType, // are an exon, cds, or utr
-				&featureStart,
-				&featureEnd,
-				&exonId, // tie feature to an exon
-				&exonNumber,
-				&tssDist,
-				&inPromoter,
-				&inExon,
-				&isIntragenic,
+			err = rows.Scan(&record.Id,
+				&record.Chr,
+				&record.GeneStart,
+				&record.GeneEnd,
+				&record.Strand,
+				&record.GeneId,
+				&record.GeneSymbol,
+				&record.Biotype,
+				&record.TranscriptId,
+				&record.TranscriptStart,
+				&record.TranscriptEnd,
+				&record.IsCanonical,
+				&record.IsLongest,
+				&record.FeatureType, // are an exon, cds, or utr
+				&record.FeatureStart,
+				&record.FeatureEnd,
+				&record.ExonId, // tie feature to an exon
+				&record.ExonNumber,
+				&record.TssDist,
+				&record.InPromoter,
+				&record.InExon,
+				&record.IsIntragenic,
 			)
 		} else {
 			// a shorter query for non-annotation mode when you just
 			// want coordinates without extra checks to see if in exon or not etc.
-			err = rows.Scan(&gid,
-				&chr,
-				&geneStart,
-				&geneEnd,
-				&strand,
-				&geneId,
-				&geneSymbol,
-				&geneBiotype,
-				&transcriptId,
-				&transcriptStart,
-				&transcriptEnd,
-				&isCanonical,
-				&isLongest,
-				&featureType, // are an exon, cds, or utr
-				&featureStart,
-				&featureEnd,
-				&exonId, // tie feature to an exon
-				&exonNumber,
+			err = rows.Scan(&record.Id,
+				&record.Chr,
+				&record.GeneStart,
+				&record.GeneEnd,
+				&record.Strand,
+				&record.GeneId,
+				&record.GeneSymbol,
+				&record.Biotype,
+				&record.TranscriptId,
+				&record.TranscriptStart,
+				&record.TranscriptEnd,
+				&record.IsCanonical,
+				&record.IsLongest,
+				&record.FeatureType, // are an exon, cds, or utr
+				&record.FeatureStart,
+				&record.FeatureEnd,
+				&record.ExonId, // tie feature to an exon
+				&record.ExonNumber,
 			)
 		}
 
@@ -572,19 +573,19 @@ func rowsToFeatures(rows *sql.Rows,
 		// only add a new gene if we don't already have it. We
 		// assume the rows are ordered by gene id hence if the
 		// id changes, we are processing a set of rows for a new gene
-		if levels.Has("gene") && (currentGene == nil || currentGene.GeneId != geneId) {
-			location, err := dna.NewStrandedLocation(chr, geneStart, geneEnd, strand)
+		if levels.Has("gene") && (currentGene == nil || currentGene.GeneId != record.GeneId) {
+			location, err := dna.NewStrandedLocation(record.Chr, record.GeneStart, record.GeneEnd, record.Strand)
 
 			if err != nil {
 				return nil, err
 			}
 
-			currentGene = &genome.GenomicFeature{Id: gid,
+			currentGene = &genome.GenomicFeature{Id: record.Id,
 				Type:   genome.FeatureTypeGene,
-				Symbol: geneSymbol,
-				GeneId: geneId,
-				//Strand:   strand,
-				Biotype: geneBiotype,
+				Symbol: record.GeneSymbol,
+				GeneId: record.GeneId,
+				//Strand:   record.Strand,
+				Biotype: record.Biotype,
 				TssDist: math.MaxInt,
 			}
 
@@ -596,14 +597,14 @@ func rowsToFeatures(rows *sql.Rows,
 		// gene inherits properties from transcripts and these become true
 		// if any transcript has them true
 		if currentGene != nil {
-			currentGene.IsCanonical = currentGene.IsCanonical || isCanonical
+			currentGene.IsCanonical = currentGene.IsCanonical || record.IsCanonical
 			//currentGene.IsLongest = currentGene.IsLongest || isLongest
 
 			// add extra properties if in annotation mode
 			if annotationMode {
-				currentGene.InPromoter = currentGene.InPromoter || inPromoter
-				currentGene.InExon = currentGene.InExon || inExon
-				currentGene.IsIntragenic = currentGene.IsIntragenic || isIntragenic
+				currentGene.InPromoter = currentGene.InPromoter || record.InPromoter
+				currentGene.InExon = currentGene.InExon || record.InExon
+				currentGene.IsIntragenic = currentGene.IsIntragenic || record.IsIntragenic
 				currentGene.Label = genome.MakePromLabel(currentGene.InPromoter, currentGene.InExon, currentGene.IsIntragenic)
 
 			}
@@ -613,39 +614,45 @@ func rowsToFeatures(rows *sql.Rows,
 		// also only add if we have a current gene
 		// also only add if we don't already have this transcript
 		if levels.Has("transcript") &&
-			(currentTranscript == nil || currentTranscript.TranscriptId != transcriptId) &&
-			(!canonicalMode || isCanonical) {
+			(currentTranscript == nil || currentTranscript.TranscriptId != record.TranscriptId) &&
+			(!canonicalMode || record.IsCanonical) {
 
-			location, err := dna.NewStrandedLocation(chr, transcriptStart, transcriptEnd, strand)
+			location, err := dna.NewStrandedLocation(record.Chr, record.TranscriptStart, record.TranscriptEnd, record.Strand)
 
 			if err != nil {
 				return nil, err
 			}
 
 			// set the properties that will not change for a transcript
-			currentTranscript = &genome.GenomicFeature{Id: gid,
+			currentTranscript = &genome.GenomicFeature{Id: record.Id,
 				//Location: location,
-				//Strand:       strand,
+				//Strand:       record.Strand,
 				Type: genome.FeatureTypeTranscript,
-				//Symbol: geneSymbol,
-				//GeneId:       geneId,
-				TranscriptId: transcriptId,
-				//Biotype:      transcriptBiotype,
-				IsCanonical: isCanonical,
-				//IsLongest:   isLongest,
-				TssDist: tssDist,
+				//Symbol: record.GeneSymbol,
+				//GeneId:       record.GeneId,
+				TranscriptId: record.TranscriptId,
+				//Biotype:      record.Biotype,
+				IsCanonical: record.IsCanonical,
+				//IsLongest:   record.IsLongest,
+				TssDist: record.TssDist,
 			}
 
 			genome.AddLocationToFeature(currentTranscript, location)
 
+			if !levels.Has(genome.FeatureTypeGene) {
+				currentTranscript.GeneId = record.GeneId
+				currentTranscript.Symbol = record.GeneSymbol
+				currentTranscript.Biotype = record.Biotype
+			}
+
 			if annotationMode {
-				currentTranscript.InPromoter = inPromoter
-				currentTranscript.IsIntragenic = isIntragenic
+				currentTranscript.InPromoter = record.InPromoter
+				currentTranscript.IsIntragenic = record.IsIntragenic
 			}
 
 			if currentGene != nil {
-				if (basemath.AbsInt(tssDist) < basemath.AbsInt(currentGene.TssDist)) || currentGene.TssDist == 0 {
-					currentGene.TssDist = tssDist
+				if (basemath.AbsInt(record.TssDist) < basemath.AbsInt(currentGene.TssDist)) || currentGene.TssDist == 0 {
+					currentGene.TssDist = record.TssDist
 				}
 
 				if currentGene.Children == nil {
@@ -661,7 +668,7 @@ func rowsToFeatures(rows *sql.Rows,
 		if currentTranscript != nil {
 			// these properties may be updated as we see more rows and we find
 			// we are in an exon
-			currentTranscript.InExon = currentTranscript.InExon || inExon
+			currentTranscript.InExon = currentTranscript.InExon || record.InExon
 			currentTranscript.Label = genome.MakePromLabel(currentTranscript.InPromoter,
 				currentTranscript.InExon,
 				currentTranscript.IsIntragenic)
@@ -676,28 +683,41 @@ func rowsToFeatures(rows *sql.Rows,
 		// If we don't have a gene, we just add it to the return list.
 		// This is because some databases may not have transcripts and we still want to
 		// capture exon information if it is available.
-		if levels.Has(featureType) {
-			location, err := dna.NewStrandedLocation(chr, featureStart, featureEnd, strand)
+		if levels.Has(record.FeatureType) {
+			location, err := dna.NewStrandedLocation(record.Chr,
+				record.FeatureStart,
+				record.FeatureEnd,
+				record.Strand)
 
 			if err != nil {
 				return nil, err
 			}
 
-			currentFeature = &genome.GenomicFeature{Id: gid,
+			currentFeature = &genome.GenomicFeature{Id: record.Id,
 				//Location: location,
-				Type: featureType,
-				//Symbol:   geneSymbol,
-				//GeneId:       geneId,
-				//TranscriptId: transcriptId,
-				ExonId:     exonId,
-				ExonNumber: exonNumber,
+				Type: record.FeatureType,
+				//Symbol:   record.GeneSymbol,
+				//GeneId:       record.GeneId,
+				//TranscriptId: record.TranscriptId,
+				ExonId:     record.ExonId,
+				ExonNumber: record.ExonNumber,
 			}
 
 			genome.AddLocationToFeature(currentFeature, location)
 
+			if !levels.Has(genome.FeatureTypeGene) {
+				currentFeature.GeneId = record.GeneId
+				currentFeature.Symbol = record.GeneSymbol
+				currentFeature.Biotype = record.Biotype
+			}
+
+			if !levels.Has(genome.FeatureTypeTranscript) {
+				currentFeature.TranscriptId = record.TranscriptId
+			}
+
 			if annotationMode {
-				currentFeature.InExon = inExon
-				currentFeature.Label = genome.MakePromLabel(inPromoter, inExon, isIntragenic)
+				currentFeature.InExon = record.InExon
+				currentFeature.Label = genome.MakePromLabel(record.InPromoter, record.InExon, record.IsIntragenic)
 			}
 
 			if currentTranscript != nil {

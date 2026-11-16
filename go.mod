@@ -9,9 +9,9 @@ replace github.com/antonybholmes/go-dna => ../go-dna
 replace github.com/antonybholmes/go-web => ../go-web
 
 require (
-	github.com/antonybholmes/go-dna v0.0.0-20261110183824-46da328d71d4
-	github.com/antonybholmes/go-sys v0.0.0-20261110151334-69bf4fef33df
-	github.com/antonybholmes/go-web v0.0.0-20261110234949-65d799daa5ac
+	github.com/antonybholmes/go-dna v0.0.0-20261114233701-0faac7069bc9
+	github.com/antonybholmes/go-sys v0.0.0-20261112231824-277e38ba69f2
+	github.com/antonybholmes/go-web v0.0.0-20261113232015-20debed5a58c
 	github.com/gin-gonic/gin v1.12.0
 )
 
@@ -52,7 +52,7 @@ require (
 	go.mongodb.org/mongo-driver/v2 v2.10.0 // indirect
 	golang.org/x/arch v0.33.0 // indirect
 	golang.org/x/crypto v0.59.0 // indirect
-	golang.org/x/exp v0.0.0-20261109185158-a52e3aef5920 // indirect
+	golang.org/x/exp v0.0.0-20261113113407-e3970619a1a4 // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/text v0.44.0 // indirect

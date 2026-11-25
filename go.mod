@@ -9,9 +9,9 @@ replace github.com/antonybholmes/go-dna => ../go-dna
 replace github.com/antonybholmes/go-web => ../go-web
 
 require (
-	github.com/antonybholmes/go-dna v0.0.0-20261118211627-bea42b743aa6
-	github.com/antonybholmes/go-sys v0.0.0-20261118211639-408b038a66d6
-	github.com/antonybholmes/go-web v0.0.0-20261118223141-29906fe238ac
+	github.com/antonybholmes/go-dna v0.0.0-20261123005400-26d3d989b173
+	github.com/antonybholmes/go-sys v0.0.0-20261123005409-c7d66a3d2106
+	github.com/antonybholmes/go-web v0.0.0-20261123005414-040457f7b15b
 	github.com/gin-gonic/gin v1.12.0
 )
 
@@ -37,7 +37,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
-	github.com/quic-go/quic-go v0.65.0 // indirect
+	github.com/quic-go/quic-go v0.66.0 // indirect
 	github.com/richardlehane/mscfb v1.0.10 // indirect
 	github.com/richardlehane/msoleps v1.0.6 // indirect
 	github.com/rs/zerolog v1.35.1 // indirect
@@ -52,7 +52,7 @@ require (
 	go.mongodb.org/mongo-driver/v2 v2.10.1 // indirect
 	golang.org/x/arch v0.33.0 // indirect
 	golang.org/x/crypto v0.59.0 // indirect
-	golang.org/x/exp v0.0.0-20261121134650-e1094eeca1b5 // indirect
+	golang.org/x/exp v0.0.0-20261124000051-d6646c509b6d // indirect
 	golang.org/x/net v0.63.0 // indirect
 	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/text v0.44.0 // indirect

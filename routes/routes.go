@@ -98,13 +98,19 @@ func ParseFeatureTypes(c *gin.Context) sys.Set[genome.FeatureType] {
 // param is the name of the URL parameter to use for the assembly or id.
 func parseQuery(c *gin.Context, param string) (*GeneQuery, error) {
 
-	id := web.FormatParam(c.Param(param))
-
-	if id == "" {
-		return nil, errors.New("assembly cannot be empty")
+	id, err := web.FormatParam(c.Param(param))
+	if err != nil {
+		return nil, err
 	}
 
-	id = genome.NormalizeAssembly(id)
+	if id == "" {
+		return nil, errors.New("id cannot be empty")
+	}
+
+	id, err = genome.NormalizeAssembly(id)
+	if err != nil {
+		return nil, err
+	}
 
 	// // check if assembly is valid
 	// if _, ok := genomeNormMap[assembly]; !ok {

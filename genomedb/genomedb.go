@@ -170,7 +170,12 @@ func (gdb *GenomeDB) Assemblies(genome string) ([]*db.Entity, error) {
 
 	assemblies := make([]*db.Entity, 0, 10)
 
-	rows, err := gdb.db.Query(AssembliesSql, sql.Named("genome", web.FormatParam(genome)))
+	genome, err := web.FormatParam(genome)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := gdb.db.Query(AssembliesSql, sql.Named("genome", genome))
 
 	if err != nil {
 		return nil, err

@@ -20,9 +20,12 @@ type (
 
 // Normalize assembly names, e.g. grch37 -> hg19 so that
 // users can use either name and get the same result
-func NormalizeAssembly(assembly string) string {
+func NormalizeAssembly(assembly string) (string, error) {
 
-	assembly = web.FormatParam(assembly)
+	assembly, err := web.FormatParam(assembly)
+	if err != nil {
+		return "", err
+	}
 
 	if assembly == "grch37" {
 		assembly = "hg19"
@@ -32,5 +35,5 @@ func NormalizeAssembly(assembly string) string {
 		assembly = "mm10"
 	}
 
-	return assembly
+	return assembly, nil
 }

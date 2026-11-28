@@ -13,7 +13,7 @@ import (
 	dnaroutes "github.com/antonybholmes/go-dna/routes"
 	"github.com/antonybholmes/go-genome"
 	"github.com/antonybholmes/go-genome/genomedb"
-	"github.com/antonybholmes/go-sys"
+	"github.com/antonybholmes/go-sys/collections"
 	"github.com/antonybholmes/go-sys/log"
 	"github.com/antonybholmes/go-web"
 	"github.com/gin-gonic/gin"
@@ -24,7 +24,7 @@ type (
 	GeneQuery struct {
 		Id string
 		//Assembly string
-		FeatureTypes sys.Set[genome.FeatureType]
+		FeatureTypes collections.Set[genome.FeatureType]
 		Database     genome.GtfDB
 		Biotype      string // e.g. "protein_coding", "non_coding", etc.
 		// only show canonical genes
@@ -69,7 +69,7 @@ var (
 	// }
 )
 
-func ParseFeatureTypes(c *gin.Context) sys.Set[genome.FeatureType] {
+func ParseFeatureTypes(c *gin.Context) collections.Set[genome.FeatureType] {
 
 	feature := strings.ToLower(c.Query("feature"))
 

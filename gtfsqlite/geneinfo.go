@@ -7,7 +7,7 @@ import (
 
 	"github.com/antonybholmes/go-dna"
 	"github.com/antonybholmes/go-genome"
-	"github.com/antonybholmes/go-sys"
+	"github.com/antonybholmes/go-sys/collections"
 )
 
 const (
@@ -147,7 +147,7 @@ const (
 )
 
 func (gdb *GtfSqliteDB) SearchByName(search string,
-	levels sys.Set[genome.FeatureType],
+	levels collections.Set[genome.FeatureType],
 	canonicalMode bool,
 	n int16) ([]*genome.GenomicFeature, error) {
 	n = max(1, min(n, MaxGeneInfoResults))
@@ -498,7 +498,7 @@ func (gdb *GtfSqliteDB) SearchByName(search string,
 
 // complete records for genes -> transcripts -> exons
 func rowsToGeneInfoRecords(rows *sql.Rows,
-	levels sys.Set[genome.FeatureType],
+	levels collections.Set[genome.FeatureType],
 	canonicalMode bool) ([]*genome.GenomicFeature, error) {
 
 	// 10 seems a reasonable guess for the number of features we might see, just

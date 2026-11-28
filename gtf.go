@@ -2,7 +2,7 @@ package genome
 
 import (
 	"github.com/antonybholmes/go-dna"
-	"github.com/antonybholmes/go-sys"
+	"github.com/antonybholmes/go-sys/collections"
 )
 
 type (
@@ -47,7 +47,7 @@ type (
 			prom *dna.PromoterRegion) (bool, error)
 
 		IntragenicFeatures(location *dna.Location,
-			levels sys.Set[FeatureType],
+			levels collections.Set[FeatureType],
 			prom *dna.PromoterRegion,
 			useOfficialGenes bool) ([]*GenomicFeature, error)
 
@@ -57,7 +57,7 @@ type (
 			useOfficialGenes bool) ([]*GenomicFeature, error)
 
 		OverlappingGenes(location *dna.Location,
-			levels sys.Set[FeatureType],
+			levels collections.Set[FeatureType],
 			prom *dna.PromoterRegion,
 			canonicalMode bool,
 			annotationMode bool,
@@ -65,7 +65,7 @@ type (
 
 		// SearchByName searches for genomic features by name
 		SearchByName(search string,
-			levels sys.Set[FeatureType],
+			levels collections.Set[FeatureType],
 			canonicalMode bool,
 			n int16) ([]*GenomicFeature, error)
 
@@ -100,17 +100,17 @@ var (
 		"utr":  "utrs",
 	}
 
-	FeatureLevelsAll               = sys.NewSet[FeatureType](FeatureTypeGene, FeatureTypeTranscript, FeatureTypeExon, FeatureTypeCds, FeatureTypeUtr)
-	FeatureLevelsGene              = sys.NewSet[FeatureType](FeatureTypeGene)
-	FeatureLevelsTranscript        = sys.NewSet[FeatureType](FeatureTypeTranscript)
-	FeatureLevelsExon              = sys.NewSet[FeatureType](FeatureTypeExon)
-	FeatureLevelsGeneAndTranscript = sys.NewSet[FeatureType](FeatureTypeGene, FeatureTypeTranscript)
-	FeatureLevelsGeneAndExon       = sys.NewSet[FeatureType](FeatureTypeGene, FeatureTypeExon)
-	FeatureLevelsTranscriptAndExon = sys.NewSet[FeatureType](FeatureTypeTranscript, FeatureTypeExon)
+	FeatureLevelsAll               = collections.NewSet[FeatureType](FeatureTypeGene, FeatureTypeTranscript, FeatureTypeExon, FeatureTypeCds, FeatureTypeUtr)
+	FeatureLevelsGene              = collections.NewSet[FeatureType](FeatureTypeGene)
+	FeatureLevelsTranscript        = collections.NewSet[FeatureType](FeatureTypeTranscript)
+	FeatureLevelsExon              = collections.NewSet[FeatureType](FeatureTypeExon)
+	FeatureLevelsGeneAndTranscript = collections.NewSet[FeatureType](FeatureTypeGene, FeatureTypeTranscript)
+	FeatureLevelsGeneAndExon       = collections.NewSet[FeatureType](FeatureTypeGene, FeatureTypeExon)
+	FeatureLevelsTranscriptAndExon = collections.NewSet[FeatureType](FeatureTypeTranscript, FeatureTypeExon)
 )
 
 func FeaturesToSearchResults(location *dna.Location,
-	levels sys.Set[FeatureType],
+	levels collections.Set[FeatureType],
 	features []*GenomicFeature,
 	annotationMode bool) (*GenomicSearchResults, error) {
 
@@ -121,7 +121,7 @@ func FeaturesToSearchResults(location *dna.Location,
 	return &ret, nil
 }
 
-func MaxLevel(levels sys.Set[FeatureType]) FeatureType {
+func MaxLevel(levels collections.Set[FeatureType]) FeatureType {
 	var level FeatureType
 
 	switch {

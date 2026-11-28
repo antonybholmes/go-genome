@@ -5,7 +5,7 @@ import (
 
 	"github.com/antonybholmes/go-dna"
 	"github.com/antonybholmes/go-genome"
-	"github.com/antonybholmes/go-sys"
+	"github.com/antonybholmes/go-sys/collections"
 	"github.com/antonybholmes/go-sys/log"
 	basemath "github.com/antonybholmes/go-sys/math"
 )
@@ -30,7 +30,7 @@ func (gdb *GtfTabixDB) Close() error {
 }
 
 func (gdb *GtfTabixDB) OverlappingGenes(location *dna.Location,
-	levels sys.Set[genome.FeatureType],
+	levels collections.Set[genome.FeatureType],
 	prom *dna.PromoterRegion,
 	canonicalMode bool,
 	annotationMode bool,
@@ -64,7 +64,9 @@ func (gdb *GtfTabixDB) ClosestGenes(location *dna.Location,
 }
 
 // Returns the genes/transcripts with exons overlapping the given location
-func (gdb *GtfTabixDB) InExon(location *dna.Location, transcriptId string, prom *dna.PromoterRegion) (bool, error) {
+func (gdb *GtfTabixDB) InExon(location *dna.Location,
+	transcriptId string,
+	prom *dna.PromoterRegion) (bool, error) {
 	roots, err := QueryRegion(gdb.file, location)
 
 	if err != nil {
@@ -93,7 +95,7 @@ func (gdb *GtfTabixDB) InExon(location *dna.Location, transcriptId string, prom 
 }
 
 func (gdb *GtfTabixDB) IntragenicFeatures(location *dna.Location,
-	levels sys.Set[genome.FeatureType],
+	levels collections.Set[genome.FeatureType],
 	prom *dna.PromoterRegion,
 	useOfficialGenes bool) ([]*genome.GenomicFeature, error) {
 
@@ -140,7 +142,7 @@ func (gdb *GtfTabixDB) IntragenicFeatures(location *dna.Location,
 // }
 
 func (gdb *GtfTabixDB) SearchByName(search string,
-	levels sys.Set[genome.FeatureType],
+	levels collections.Set[genome.FeatureType],
 	canonicalMode bool,
 	n int16) ([]*genome.GenomicFeature, error) {
 	return nil, nil
@@ -150,7 +152,7 @@ func (gdb *GtfTabixDB) SearchByName(search string,
 func toGenomicFeature(location *dna.Location,
 	prom *dna.PromoterRegion,
 	feats []*Feature,
-	levels sys.Set[genome.FeatureType],
+	levels collections.Set[genome.FeatureType],
 	canonicalMode bool,
 	annotationMode bool) ([]*genome.GenomicFeature, error) {
 	var currentGene *genome.GenomicFeature

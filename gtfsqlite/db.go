@@ -10,6 +10,7 @@ import (
 
 	"github.com/antonybholmes/go-dna"
 	"github.com/antonybholmes/go-genome"
+	"github.com/antonybholmes/go-sys/collections"
 	basemath "github.com/antonybholmes/go-sys/math"
 
 	"github.com/antonybholmes/go-sys"
@@ -348,7 +349,7 @@ func (gdb *GtfSqliteDB) Close() error {
 }
 
 func (gdb *GtfSqliteDB) OverlappingGenes(location *dna.Location,
-	levels sys.Set[genome.FeatureType],
+	levels collections.Set[genome.FeatureType],
 	prom *dna.PromoterRegion,
 	canonicalMode bool,
 	annotationMode bool,
@@ -419,7 +420,7 @@ func (gdb *GtfSqliteDB) OverlappingGenes(location *dna.Location,
 // }
 
 func (gdb *GtfSqliteDB) IntragenicFeatures(location *dna.Location,
-	levels sys.Set[genome.FeatureType],
+	levels collections.Set[genome.FeatureType],
 	prom *dna.PromoterRegion,
 	useOfficialGenes bool) ([]*genome.GenomicFeature, error) {
 
@@ -495,7 +496,7 @@ func (gdb *GtfSqliteDB) ClosestGenes(location *dna.Location,
 }
 
 func rowsToFeatures(rows *sql.Rows,
-	levels sys.Set[genome.FeatureType],
+	levels collections.Set[genome.FeatureType],
 	canonicalMode bool,
 	annotationMode bool) ([]*genome.GenomicFeature, error) {
 
